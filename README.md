@@ -4,6 +4,8 @@
 
 **它只是外观层。** ☰ 走原生 `hass-toggle-menu`，⋮ 就是原生 `ha-dropdown`，dock 就是原生 `ha-tab-group` —— 切页、菜单、侧边栏全部是 HA 自己的逻辑，不会出现"点了没反应"或"按钮是假的"。
 
+![Glass UI](images/screenshot-dark.png)
+
 - 适用：Home Assistant 2024.1+（2026.x 已实测）
 - 不依赖 card-mod / kiosk-mode / 任何自定义卡片
 - 编辑仪表盘模式自动还原成原生外观（标题照常可编辑）
