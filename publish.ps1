@@ -1,4 +1,4 @@
-# 一键推送 / 发版（需要先装 git + gh 并 gh auth login）
+﻿# 一键推送 / 发版（需要先装 git + gh 并 gh auth login）
 # 用法：powershell -ExecutionPolicy Bypass -File .\publish.ps1 -Version 1.0.0
 # （Owner 默认 dw881114，要换仓库名就加 -Repo xxx）
 
@@ -26,6 +26,11 @@ Push-Location $PSScriptRoot
 try {
   if (-not (Test-Path ".git")) {
     git init -b main | Out-Null
+  }
+  # 没有全局 git 身份时给一个本地兜底，避免 commit 直接失败
+  if (-not (git config user.email)) {
+    git config user.name $Owner
+    git config user.email "$Owner@users.noreply.github.com"
   }
   git add -A
   git commit -m "Glass UI $Version" | Out-Null
