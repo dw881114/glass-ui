@@ -217,8 +217,6 @@
   --g-icon-color: #ffffff;
   --g-icon-active: var(--primary-color, var(--accent-color, #3b82f6));
   --g-lens-bg: rgba(0, 0, 0, .55);
-  /* 按住放大时：透明度大幅下降（更实、更暗） */
-  --g-lens-bg-grow: rgba(0, 0, 0, .82);
   --g-lens-filter: none;
   --g-lens-shadow: none;
 }
@@ -240,7 +238,6 @@
   --g-icon-color: #16171c;
   --g-icon-active: var(--primary-color, var(--accent-color, #3b82f6));
   --g-lens-bg: rgba(0, 0, 0, .12);
-  --g-lens-bg-grow: rgba(0, 0, 0, .30);
   --g-lens-filter: none;
   --g-lens-shadow: none;
 }
@@ -1131,7 +1128,7 @@ ${P} hui-view-container {
     ? "none"
     : `transform ${MOVE_MS}ms cubic-bezier(.32,.72,0,1), width .18s ease, height .18s ease`;
 
-  // 按住 / 拖动时高亮块变大（高了 5px、左右各宽 10px），同时透明度大幅下降
+  // 按住 / 拖动时高亮块变大（高了 5px、左右各宽 10px），底色 / 透明度不变
   function setLensGrow(tabs, on) {
     if (!indicator || !indicator.isConnected) return;
     const fill = indicator.firstElementChild;
@@ -1142,8 +1139,6 @@ ${P} hui-view-container {
     if (fill.style.right !== dx) fill.style.right = dx;
     if (fill.style.top !== dy) fill.style.top = dy;
     if (fill.style.bottom !== dy) fill.style.bottom = dy;
-    const bg = on ? "var(--g-lens-bg-grow)" : "var(--g-lens-bg)";
-    if (fill.style.background !== bg) fill.style.background = bg;
     // 蓝色裁剪跟着一起变宽
     if (tabs && tabs.length) trackHover(tabs, reduceMotion ? 0 : GROW_MS + 120);
   }
@@ -1568,7 +1563,7 @@ ${P} hui-view-container {
         "border-radius:999px",
         "background:var(--g-lens-bg)",
         "box-shadow:var(--g-lens-shadow)",
-        `transition:left ${GROW_MS}ms cubic-bezier(.32,.72,0,1), right ${GROW_MS}ms cubic-bezier(.32,.72,0,1), top ${GROW_MS}ms cubic-bezier(.32,.72,0,1), bottom ${GROW_MS}ms cubic-bezier(.32,.72,0,1), background-color ${GROW_MS}ms ease`,
+        `transition:left ${GROW_MS}ms cubic-bezier(.32,.72,0,1), right ${GROW_MS}ms cubic-bezier(.32,.72,0,1), top ${GROW_MS}ms cubic-bezier(.32,.72,0,1), bottom ${GROW_MS}ms cubic-bezier(.32,.72,0,1)`,
         "will-change:left, right, top, bottom",
       ].join(";");
       indicator.appendChild(fill);
