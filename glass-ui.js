@@ -577,6 +577,10 @@ ${P} .toolbar ha-tab-group-tab::part(base) {
   background: transparent !important;
   border-bottom: none !important;
 }
+/* HA 自己那行 tab 文字：我们已经在下面画了一份，避免视图没图标时出现两行 */
+${P} .toolbar ha-tab-group-tab > span:not(.glass-tab-label):not(.glass-tint) {
+  display: none !important;
+}
 /* 图标下面那行小字（内容 = 视图标题） */
 ${P} .glass-tab-label {
   display: block;
@@ -1041,7 +1045,8 @@ ${P} hui-view-container {
 
   // 底栏文字取值：① 优先用视图自己的 title（编辑界面里那个「标题」）
   //                ② 没有 title 才看页面第一行是不是 `# 标题`（h1）
-  //                ③ 都没有就留空，不要拿别的页面的标题顶上
+  //                ③ 再退到 HA 自己在 tab 上渲染的文字（视图没配 title 时 HA 会用 path）
+  //                ④ 都没有就留空，不要拿别的页面的标题顶上
   function labelForPath(panel, path) {
     const views =
       (panel && panel.lovelace && panel.lovelace.config && panel.lovelace.config.views) ||
@@ -1059,10 +1064,29 @@ ${P} hui-view-container {
     return m ? m[1].trim() : "";
   }
 
+  // 直接读 HA 自己渲染在 tab 里的图标 / 文字，保证和 HA 显示的一致：
+  // 视图没配 icon 时 HA 就不画图标（我们也不该凭空补一个 dashboard 图标）；
+  // 没配 title 时 HA 会在 tab 上渲染 path，我们也跟着用。
+  function nativeTabIcon(tab) {
+    const el = Array.from(tab.children).find((c) => c.tagName === "HA-ICON");
+    if (!el) return "";
+    return (typeof el.icon === "string" && el.icon) || el.getAttribute("icon") || "";
+  }
+
+  function nativeTabLabel(tab) {
+    // HA 用 aria-label 记录这个 tab 的显示名（策略仪表盘里也是它算出来的标题）
+    const aria = (tab.getAttribute("aria-label") || "").trim();
+    if (aria) return aria;
+    const el = Array.from(tab.children).find(
+      (c) => c.tagName === "SPAN" && !c.classList.contains("glass-tab-label")
+    );
+    return el ? (el.textContent || "").trim() : "";
+  }
+
   function injectTabLabels(toolbar, panel) {
     dockTabs(toolbar).forEach((tab) => {
       const path = tab.getAttribute("data-path");
-      const text = labelForPath(panel, path);
+      const text = labelForPath(panel, path) || nativeTabLabel(tab);
       if (CONFIG.tabLabel) {
         let label = tab.querySelector(":scope > .glass-tab-label");
         if (!label) {
@@ -1072,20 +1096,47 @@ ${P} hui-view-container {
         }
         if (label.textContent !== text) label.textContent = text;
       }
-      ensureTint(tab, panel, path, text);
+      ensureTint(tab, iconForPath(panel, path) || nativeTabIcon(tab), text);
     });
   }
 
-  // 顶栏 / 底栏图标：优先用视图自己配置的 icon
+  // 一次性把底栏信息打到控制台，方便远程排查不同 HA / 不同仪表盘的差异
+  let tabDiagSig = "";
+  function logTabDiag(toolbar, panel) {
+    const tabs = dockTabs(toolbar);
+    const sig = tabs.map((t) => t.getAttribute("data-path")).join("|");
+    if (!sig || tabDiagSig === sig) return;
+    tabDiagSig = sig;
+    const views =
+      (panel && panel.lovelace && panel.lovelace.config && panel.lovelace.config.views) || [];
+    log(
+      "tabs",
+      tabs.map((t) => {
+        const path = t.getAttribute("data-path");
+        const v = views.find((x) => x.path === path) || {};
+        const lbl = t.querySelector(":scope > .glass-tab-label");
+        return {
+          path,
+          title: v.title || "",
+          icon: v.icon || "",
+          haLabel: nativeTabLabel(t),
+          haIcon: nativeTabIcon(t),
+          shown: (lbl && lbl.textContent) || "",
+        };
+      })
+    );
+  }
+
+  // 底栏图标：优先用视图自己配置的 icon；没配就退回 HA 实际渲染的那个
   function iconForPath(panel, path) {
     const views =
       (panel && panel.lovelace && panel.lovelace.config && panel.lovelace.config.views) || [];
     const view = views.find((v) => v.path === path);
-    return (view && view.icon) || "mdi:view-dashboard";
+    return (view && view.icon) || "";
   }
 
   // 盖在高亮块上的蓝色副本（内容与真实图标/文字完全一致，靠 clip 只露出一部分）
-  function ensureTint(tab, panel, path, text) {
+  function ensureTint(tab, icon, text) {
     let tint = tab.querySelector(":scope > .glass-tint");
     if (!tint) {
       tint = document.createElement("span");
@@ -1093,17 +1144,19 @@ ${P} hui-view-container {
       tint.setAttribute("aria-hidden", "true");
       tab.appendChild(tint);
     }
-    const icon = iconForPath(panel, path);
     const key = `${icon}|${text}`;
     if (tint.dataset.key === key) return;
     tint.dataset.key = key;
     tint.textContent = "";
 
-    const ic = document.createElement("ha-icon");
-    ic.icon = icon;
-    tint.appendChild(ic);
+    // 视图没配 icon 时 HA 本来就不显示图标，这里也不补（否则会多出一个错的图标）
+    if (icon) {
+      const ic = document.createElement("ha-icon");
+      ic.icon = icon;
+      tint.appendChild(ic);
+    }
 
-    if (CONFIG.tabLabel) {
+    if (CONFIG.tabLabel && text) {
       const lb = document.createElement("span");
       lb.className = "glass-tab-label";
       lb.textContent = text;
@@ -1739,6 +1792,7 @@ ${P} hui-view-container {
     hideSubviewTabs(toolbar, panel);
     markActiveTab(toolbar);
     injectTabLabels(toolbar, panel);
+    logTabDiag(toolbar, panel);
     syncIndicator(toolbar);
     syncSubviewDock(root, panel, useCustomDock);
     dockCount = useCustomDock
