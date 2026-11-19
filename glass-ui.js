@@ -64,6 +64,8 @@
       moveDuration: 486,
       // 放大 / 缩小的动画时长（ms）
       growDuration: 200,
+      // 页面左右滑动切换相邻 tab 的最短距离（CSS px）
+      pageSwipeThreshold: 60,
     },
 
     iconSize: 22, // 底部 dock 图标大小
@@ -1170,6 +1172,27 @@ ${P} hui-view-container {
   let dragState = null;
   let snapUntil = 0;
   let hoverRaf = 0;
+  let suppressSwipeClick = null;
+  window.addEventListener(
+    "click",
+    (ev) => {
+      const guard = suppressSwipeClick;
+      if (!guard) return;
+      if (Date.now() > guard.until) {
+        suppressSwipeClick = null;
+        return;
+      }
+      if (
+        Math.abs(ev.clientX - guard.x) <= 70 &&
+        Math.abs(ev.clientY - guard.y) <= 70
+      ) {
+        suppressSwipeClick = null;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+      }
+    },
+    true
+  );
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const MOVE_MS = CONFIG.dock.moveDuration || 486;
   const GROW_MS = CONFIG.dock.growDuration || 200;
@@ -1198,10 +1221,10 @@ ${P} hui-view-container {
 
   // 切到某个视图：改 URL + 派发 location-changed（等价于 HA 内部的 navigate）
   function goToPath(path) {
-    if (!path) return;
+    if (!path) return false;
     const seg = location.pathname.split("/").filter(Boolean);
     const cur = seg.length > 1 ? decodeURIComponent(seg[seg.length - 1]) : "";
-    if (path === cur) return;
+    if (path === cur) return false;
     const base = seg.length ? `/${seg[0]}` : "";
     history.pushState(null, "", `${base}/${encodeURIComponent(path)}`);
     window.dispatchEvent(
@@ -1211,10 +1234,37 @@ ${P} hui-view-container {
         detail: { replace: false },
       })
     );
+    return true;
   }
 
   function goToTab(tab) {
-    goToPath(tab && tab.getAttribute("data-path"));
+    return goToPath(tab && tab.getAttribute("data-path"));
+  }
+
+  // 通过 HA Companion 的原生 external bus 触发 iOS / Android Taptic；
+  // 普通 Android 浏览器则退回 Vibration API。iOS Safari 没有 Web Vibration API。
+  function emitDockHaptic() {
+    const hasCompanionBridge = Boolean(
+      window.externalAppV2 ||
+        window.externalApp ||
+        (window.webkit &&
+          window.webkit.messageHandlers &&
+          window.webkit.messageHandlers.externalBus)
+    );
+
+    if (hasCompanionBridge) {
+      window.dispatchEvent(new CustomEvent("haptic", { detail: "selection" }));
+      return true;
+    }
+
+    if (navigator && typeof navigator.vibrate === "function") {
+      try {
+        return navigator.vibrate(14);
+      } catch (e) {
+        /* vibration may be unavailable or blocked by the browser */
+      }
+    }
+    return false;
   }
 
   // 图标颜色唯一依据：黑色高亮块此刻盖住了哪一段。
@@ -1298,10 +1348,14 @@ ${P} hui-view-container {
       if (idx < 0 || !state.tabs[idx]) return;
       if (state.hoverIdx === idx) return;
       state.hoverIdx = idx;
+      state.hapticFired = false;
       clearTimeout(state.dwellTimer);
       state.dwellTimer = setTimeout(() => {
         if (dragState !== state) return;
-        goToTab(state.tabs[idx]);
+        const changed = goToTab(state.tabs[idx]);
+        if (changed && !state.hapticFired) {
+          state.hapticFired = emitDockHaptic();
+        }
       }, 200);
     };
 
@@ -1336,10 +1390,12 @@ ${P} hui-view-container {
           tabs,
           pressedTab,
           pointerId: ev.pointerId,
+          pointerType: ev.pointerType,
           settleTimer: 0,
           dwellTimer: 0,
           growTimer: 0,
           hoverIdx: -1,
+          hapticFired: false,
         };
         dragState = state;
 
@@ -1348,6 +1404,9 @@ ${P} hui-view-container {
           if (dragState !== state) return;
           state.grown = true;
           setLensGrow(state.tabs, true);
+          if (!state.hapticFired && state.pointerType !== "mouse") {
+            state.hapticFired = emitDockHaptic();
+          }
         }, CONFIG.dock.pressGrowDelay || 140);
 
         // 按下的不是当前高亮那格：先把高亮滑过去，再开始跟手
@@ -1487,6 +1546,164 @@ ${P} hui-view-container {
     tg.addEventListener("contextmenu", (ev) => {
       if (dragState) ev.preventDefault();
     });
+  }
+
+  // 页面内容区左右滑动切换相邻视图；纵向页面滚动、卡片控件和横向滚动区域不受影响。
+  function attachPageSwipe(root, panel, toolbar) {
+    const container =
+      root.shadowRoot && root.shadowRoot.querySelector("hui-view-container");
+    if (!container || container.dataset.glassPageSwipe === "1") return;
+    container.dataset.glassPageSwipe = "1";
+
+    let touch = null;
+    const interactiveSelector = [
+      "button",
+      "a",
+      "input",
+      "textarea",
+      "select",
+      "option",
+      "video",
+      "audio",
+      "[role='button']",
+      "[role='slider']",
+      "[role='switch']",
+      "[contenteditable='true']",
+      "[data-no-page-swipe]",
+      "ha-slider",
+      "ha-control-slider",
+      "ha-icon-button",
+      "ha-dropdown",
+      "ha-tab-group",
+    ].join(",");
+
+    const isBlockedStart = (ev) => {
+      const path = ev.composedPath ? ev.composedPath() : [ev.target];
+      for (const node of path) {
+        if (!node || typeof node.matches !== "function") continue;
+        if (node.matches(interactiveSelector)) return true;
+        // 保留卡片 / 内容自身的横向滚动（如图表时间轴、轮播卡片）
+        const cs = getComputedStyle(node);
+        if (
+          node.scrollWidth > node.clientWidth + 8 &&
+          (cs.overflowX === "auto" || cs.overflowX === "scroll")
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const adjacentTabs = () => {
+      const native = dockTabs(toolbar);
+      if (native.length) return native;
+      return Array.from(
+        root.shadowRoot.querySelectorAll(".glass-custom-dock .glass-custom-tab")
+      );
+    };
+
+    const switchAdjacent = (direction, x, y) => {
+      const view = currentView(panel);
+      if (view && view.subview) return false;
+      const tabs = adjacentTabs();
+      const seg = location.pathname.split("/").filter(Boolean);
+      const path = seg.length > 1 ? decodeURIComponent(seg[seg.length - 1]) : "";
+      const index = tabs.findIndex((tab) => tab.getAttribute("data-path") === path);
+      if (index < 0) return false;
+      const next = tabs[index + direction];
+      if (!next) return false;
+      const changed = goToTab(next);
+      if (changed) {
+        suppressSwipeClick = { until: Date.now() + 700, x, y };
+        emitDockHaptic();
+      }
+      return changed;
+    };
+
+    container.addEventListener(
+      "touchstart",
+      (ev) => {
+        if (ev.touches.length !== 1 || isBlockedStart(ev)) {
+          touch = null;
+          return;
+        }
+        const point = ev.changedTouches[0];
+        if (!point) return;
+        touch = {
+          id: point.identifier,
+          startX: point.clientX,
+          startY: point.clientY,
+          x: point.clientX,
+          y: point.clientY,
+          horizontal: false,
+        };
+      },
+      { capture: true, passive: true }
+    );
+
+    container.addEventListener(
+      "touchmove",
+      (ev) => {
+        if (!touch) return;
+        if (ev.touches.length !== 1) {
+          touch = null;
+          return;
+        }
+        const point = Array.from(ev.touches).find((p) => p.identifier === touch.id);
+        if (!point) return;
+        touch.x = point.clientX;
+        touch.y = point.clientY;
+        const dx = touch.x - touch.startX;
+        const dy = touch.y - touch.startY;
+
+        if (!touch.horizontal) {
+          if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
+          // 明确的纵向手势交给页面正常滚动
+          if (Math.abs(dy) >= Math.abs(dx) * 1.15) {
+            touch = null;
+            return;
+          }
+          touch.horizontal = true;
+        }
+
+        // 只在确定是横向切页手势后阻止默认行为，纵向滚动不受影响
+        if (ev.cancelable) ev.preventDefault();
+      },
+      { capture: true, passive: false }
+    );
+
+    container.addEventListener(
+      "touchend",
+      (ev) => {
+        if (!touch) return;
+        const state = touch;
+        touch = null;
+        if (!state.horizontal) return;
+        const point =
+          Array.from(ev.changedTouches || []).find((p) => p.identifier === state.id) ||
+          state;
+        const dx = point.clientX - state.startX;
+        const dy = point.clientY - state.startY;
+        if (
+          Math.abs(dx) < (CONFIG.dock.pageSwipeThreshold || 60) ||
+          Math.abs(dx) < Math.abs(dy) * 1.15
+        ) {
+          return;
+        }
+        if (ev.cancelable) ev.preventDefault();
+        // 向左滑 -> 下一个 tab；向右滑 -> 上一个 tab
+        switchAdjacent(dx < 0 ? 1 : -1, point.clientX, point.clientY);
+      },
+      { capture: true, passive: false }
+    );
+
+    container.addEventListener(
+      "touchcancel",
+      () => {
+        touch = null;
+      },
+      { capture: true, passive: true }
+    );
   }
 
   // 非子视图列表（子视图不进底栏）
@@ -1795,6 +2012,7 @@ ${P} hui-view-container {
     logTabDiag(toolbar, panel);
     syncIndicator(toolbar);
     syncSubviewDock(root, panel, useCustomDock);
+    attachPageSwipe(root, panel, toolbar);
     dockCount = useCustomDock
       ? nonSubviewViews(panel).length
       : dockTabs(toolbar).length;

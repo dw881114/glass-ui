@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.5
+
+- 添加在页面内容区左滑 / 右滑切换相邻 tab（默认阈值 60px）
+- 保留纵向滚动；排除按钮、滑块和横向滚动控件；子视图不触发
+- 页面横滑切页也提供触觉反馈
+- 长按 / 停留切页使用 HA Companion 原生 haptic bridge；普通 Android 浏览器使用 `navigator.vibrate`
+
 ## 1.0.4
 
 - dock 的文字 / 图标改成直接跟随 HA 自己渲染的 tab（`aria-label` + `ha-icon`）

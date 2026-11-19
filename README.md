@@ -90,6 +90,7 @@ window.GLASS_UI_CONFIG = {
     pressGrowDelay: 140,
     moveDuration: 486,
     growDuration: 200,
+    pageSwipeThreshold: 60,  // 页面左右滑切到相邻 tab 的最短距离（px）
   },
   topButtons: { size: 46, iconSize: 21 },
   collapseSidebarOnWide: true,
@@ -106,6 +107,10 @@ window.GLASS_UI_CONFIG = {
 | 点 ⋮ | 原生下拉菜单 |
 | 点 dock 图标 | 切页（原生 tab 行为） |
 | 按住 / 拖动 dock | 高亮块跟手横移 |
+| 页面左右滑动 | 左滑切到下一个 tab，右滑切到上一个；至少 60px；到边界不循环 |
+| 触觉反馈 | 长按、停留切页或页面横滑切页时反馈；HA Companion iOS / Android 使用原生 haptic bridge，普通 Android 浏览器使用 Vibration API（iOS Safari 不支持网页触觉反馈） |
+
+- 页面横滑不会抢占纵向滚动；按钮、滑块等交互控件和横向滚动区域不触发切页；子视图不触发
 
 ---
 
