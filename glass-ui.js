@@ -83,6 +83,7 @@
     overflowMenuOffset: "auto", // 菜单相对圆钮的垂直偏移："auto" = 直接盖住圆钮；数字 = px（正数往下）
 
     // PC 上也把侧边栏收起来，用左上 ☰ 呼出（手机那种悬浮抽屉）。
+    // PC 左上 ☰ 只在侧边栏隐藏时显示；窄屏保持原有显示逻辑。
     // 关掉后会把侧边栏恢复成 HA 原来的"常驻窄条"。
     collapseSidebarOnWide: true,
   };
@@ -259,7 +260,7 @@ ${P} .header {
 }
 /* HA 的 .toolbar 自带一条 1px 分隔线，去掉 */
 ${P} .toolbar { position: relative !important; border-bottom: none !important; }
-/* 原生 ☰ 在桌面端本来就是空的，统一隐藏，改用下面的 .glass-menu */
+/* 原生 ☰ 在桌面端本来就是空的，按侧栏状态显示自定义 .glass-menu */
 ${P} ha-menu-button { display: none !important; }
 
 /* 菜单打开时的透明遮罩：点外面只关菜单，不点到底下的卡片 */
@@ -868,6 +869,19 @@ ${P} hui-view-container {
       toggleSidebar();
     });
     toolbar.appendChild(btn);
+  }
+
+  function syncMenuButton(toolbar, ha, isSubview) {
+    const button = toolbar.querySelector(".glass-menu");
+    const narrow = window.matchMedia("(max-width: 870px)").matches;
+    const sidebarHidden = ha?.hass?.dockedSidebar === "always_hidden";
+    const shouldShow = !isSubview && (narrow || sidebarHidden);
+
+    if (shouldShow) {
+      if (!button) injectMenuButton(toolbar);
+    } else if (button) {
+      button.remove();
+    }
   }
 
   function restyleOverflow(toolbar) {
@@ -1996,12 +2010,7 @@ ${P} hui-view-container {
     root.toggleAttribute("glass-no-tabs", !isSubview && !hasNativeTabs);
 
     injectTitle(toolbar, panel, !isSubview);
-    if (!isSubview) {
-      injectMenuButton(toolbar);
-    } else {
-      const menu = toolbar.querySelector(".glass-menu");
-      if (menu) menu.remove();
-    }
+    syncMenuButton(toolbar, ha, isSubview);
     restyleOverflow(toolbar);
     offsetOverflowMenu(toolbar);
     syncMenuScrim(root, toolbar);
