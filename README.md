@@ -57,9 +57,8 @@
 | `tabLabel` | `0` 关掉 dock 图标下面的文字 |
 | `iconSize` / `tabLabelSize` | 图标 / 文字大小（px） |
 | `hideExtraActions` | `0` 保留搜索 / 语音助手 / 编辑三个按钮 |
-| `collapseSidebarOnWide` | `0` 宽屏不收起侧边栏 |
 
-PC 上左上角菜单按钮只在 HA 侧栏设置为隐藏时显示；手机/窄屏的显示逻辑不变。
+PC 上左上角菜单按钮只在 HA 侧栏设置为隐藏时显示；手机/窄屏的显示逻辑不变。侧栏常驻 / 折叠 / 隐藏完全遵循 HA 用户设置，脚本加载时不会强制切换。
 
 **2) 在它之前加载的脚本里设置全局对象**（深合并，可改任意嵌套项）
 
@@ -85,7 +84,8 @@ window.GLASS_UI_CONFIG = {
     maxWidth: 396,
     height: 60,
     inset: 5,
-    bottom: 1,              // 安卓 / 桌面
+    bottom: 1,              // 安卓 / 窄屏
+    bottomDesktop: 5,       // 桌面网页端底栏距屏幕底边
     bottomIOS: 22,          // iOS（Home 指示条安全区）
     pressGrowExtraWidth: 10, // 按住时左右各加宽
     pressGrowExtraHeight: 5, // 按住时高度 = 胶囊高度 + 5
@@ -95,7 +95,8 @@ window.GLASS_UI_CONFIG = {
     pageSwipeThreshold: 60,  // 页面左右滑切到相邻 tab 的最短距离（px）
   },
   topButtons: { size: 46, iconSize: 21 },
-  collapseSidebarOnWide: true,
+  overflowMenuOffset: "auto",
+  overflowMenuEdge: 5,
 }
 ```
 
@@ -106,13 +107,19 @@ window.GLASS_UI_CONFIG = {
 | 操作 | 行为 |
 |---|---|
 | 点 ☰ | 窄屏开侧边栏抽屉；宽屏停靠 / 收起侧边栏 |
+| 侧栏抽屉 | 保持原生侧栏布局和宽度，外框距顶 0px（贴齐刘海安全区）、距左 10px（叠加安全区）、距底与 dock 一致，采用与 dock 一样的玻璃底色、模糊和边框；内部安全区归零，标题 / 底部账号与桌面保持相同上下间距 |
+| 常驻侧栏 | 侧栏未隐藏时（展开或折叠窄条），`ha-drawer` 的 `.sidebar-shell` 套用与抽屉完全相同的玻璃圆角框；内容区左内边距自动让出侧栏宽度 + 10px；当前页面的顶栏和 Lovelace 背景层向左延伸到侧栏下方，侧栏浮在背景上；不移动页面元素 |
 | 点 ⋮ | 原生下拉菜单 |
+| 顶栏按钮 / 菜单 | ☰ 左边距、⋮ 右边距各 10px + 安全区；按钮上沿距顶栏 10px（顶栏已避开刘海）；⋮ 菜单距视口顶部和右侧各 10px |
 | 点 dock 图标 | 切页（原生 tab 行为） |
+| dock 外观 | 无论屏幕宽度如何，都不显示底栏左右滚动箭头 |
+| 桌面网页端 dock | 距视口底边 5px |
 | 按住 / 拖动 dock | 高亮块跟手横移 |
 | 页面左右滑动 | 左滑切到下一个 tab，右滑切到上一个；至少 60px；到边界不循环 |
 | 触觉反馈 | 长按、停留切页或页面横滑切页时反馈；HA Companion iOS / Android 使用原生 haptic bridge，普通 Android 浏览器使用 Vibration API（iOS Safari 不支持网页触觉反馈） |
 
 - 页面横滑不会抢占纵向滚动；按钮、滑块等交互控件和横向滚动区域不触发切页；子视图不触发
+- HA 生成的 dock 左右滚动箭头会隐藏，不随视口宽度出现
 
 ---
 
@@ -120,7 +127,7 @@ window.GLASS_UI_CONFIG = {
 
 - 只改外观，**不提供**任何卡片、实体或自动化。
 - 依赖 HA 前端内部结构（`hui-root` / `ha-tab-group` 的 shadow DOM）。HA 大版本改版时可能需要跟进，见 CHANGELOG。
-- 宽屏下默认把侧边栏收起（`collapseSidebarOnWide`），不喜欢可以关掉。
+- 脚本遵循 HA 的侧栏设置，不会在加载时强制展开 / 收起；常驻、折叠或隐藏由用户在 HA 中决定。
 
 ## 许可
 

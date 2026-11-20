@@ -51,6 +51,7 @@
       height: 60, // 胶囊高度
       inset: 5, // 高亮块距离胶囊内沿的边距
       bottom: 1, // 距屏幕底部的距离（安卓 / 桌面）
+      bottomDesktop: 5, // 桌面网页端专用：胶囊距视口底边 5px
       bottomIOS: 22, // iOS 单独给一个值：iPhone 的安全区有 34px，直接用会离底边太远
       // 安卓 / 桌面是否叠加 env(safe-area-inset-bottom)（安卓一般就是 0，留着无害）
       safeArea: true,
@@ -81,11 +82,8 @@
     hideExtraActions: true, // 隐藏原生 搜索 / 语音助手 / 编辑 三个按钮
     addEditMenuItem: true, // 在 ⋮ 菜单里补一项「编辑仪表盘」（HA 自己有时已带，则自动跳过）
     overflowMenuOffset: "auto", // 菜单相对圆钮的垂直偏移："auto" = 直接盖住圆钮；数字 = px（正数往下）
+    overflowMenuEdge: 10, // ⋮ 弹出菜单距视口边缘（顶 / 右等）的安全距离
 
-    // PC 上也把侧边栏收起来，用左上 ☰ 呼出（手机那种悬浮抽屉）。
-    // PC 左上 ☰ 只在侧边栏隐藏时显示；窄屏保持原有显示逻辑。
-    // 关掉后会把侧边栏恢复成 HA 原来的"常驻窄条"。
-    collapseSidebarOnWide: true,
   };
 
   // 覆盖配置的两种方式（都不用改这个文件，HACS 升级时也不会丢）：
@@ -129,7 +127,7 @@
     const out = {};
     const dash = p.get("dashboards");
     if (dash) out.dashboards = dash.split(",").map((s) => s.trim()).filter(Boolean);
-    ["tabLabel", "hideExtraActions", "addEditMenuItem", "collapseSidebarOnWide"].forEach(
+    ["tabLabel", "hideExtraActions", "addEditMenuItem"].forEach(
       (k) => {
         if (!p.has(k)) return;
         out[k] = !/^(0|false|no|off)$/i.test(p.get(k));
@@ -196,6 +194,19 @@
   --g-icon: ${CONFIG.iconSize}px;
   --g-btn: ${CONFIG.topButtons.size}px;
   --g-btn-icon: ${CONFIG.topButtons.iconSize}px;
+  /* 顶栏按钮 / 标题在 .toolbar 内部定位；.header 已经用 padding-top 让出了刘海，
+     所以这里用固定值，不能再叠加 env(safe-area-inset-top)，否则 iOS 会多下移一份。 */
+  --g-bar-top: 10px;
+  /* 侧栏抽屉是 fixed 到视口的，需要自己叠加安全区 */
+  --g-edge-top: env(safe-area-inset-top, 0px);
+  --g-edge-left: calc(10px + env(safe-area-inset-left, 0px));
+  --g-edge-right: calc(10px + env(safe-area-inset-right, 0px));
+}
+
+@media (min-width: 871px) {
+  :host([glass-on]) {
+    --g-dock-bottom: ${CONFIG.dock.bottomDesktop ?? 5}px;
+  }
 }
 
 /* ==========================================================================
@@ -208,6 +219,7 @@
   --g-title: #ffffff;
   --g-title-shadow: 0 1px 3px rgba(0,0,0,.45);
   --g-dock-tint: rgba(14, 14, 18, .16);
+  --g-sidebar-tint: rgba(14, 14, 18, .90);
   --g-dock-filter: blur(5px) saturate(180%) brightness(1.10);
   --g-dock-band: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.05) 50%, rgba(255,255,255,.035) 100%);
   --g-dock-inner: none;
@@ -219,7 +231,14 @@
   --g-rim-w: .5px;
   --g-icon-color: #ffffff;
   --g-icon-active: var(--primary-color, var(--accent-color, #3b82f6));
-  --g-lens-bg: rgba(0, 0, 0, .55);
+  /* 高亮块跟侧栏选中按钮同款暗蓝：与 HA 的 ha-list-item-button.selected::before
+     用同一个颜色变量和同一档透明度，深浅色自动跟随主题。 */
+  --g-lens-bg: color-mix(
+    in srgb,
+    var(--sidebar-selected-icon-color, var(--primary-color, #009ac7))
+      calc(var(--dark-divider-opacity, .12) * 100%),
+    transparent
+  );
   --g-lens-filter: none;
   --g-lens-shadow: none;
 }
@@ -231,6 +250,7 @@
   --g-title: #16171c;
   --g-title-shadow: 0 1px 2px rgba(255,255,255,.7);
   --g-dock-tint: rgba(255, 255, 255, .24);
+  --g-sidebar-tint: rgba(255, 255, 255, .90);
   --g-dock-filter: blur(5px) saturate(185%) brightness(1.02);
   --g-dock-band: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,0) 100%);
   --g-dock-inner: none;
@@ -240,7 +260,13 @@
   --g-rim-w: .5px;
   --g-icon-color: #16171c;
   --g-icon-active: var(--primary-color, var(--accent-color, #3b82f6));
-  --g-lens-bg: rgba(0, 0, 0, .12);
+  /* 明亮模式也跟侧栏选中按钮保持一致（颜色 / 透明度都取自 HA 主题变量） */
+  --g-lens-bg: color-mix(
+    in srgb,
+    var(--sidebar-selected-icon-color, var(--primary-color, #009ac7))
+      calc(var(--dark-divider-opacity, .12) * 100%),
+    transparent
+  );
   --g-lens-filter: none;
   --g-lens-shadow: none;
 }
@@ -259,7 +285,12 @@ ${P} .header {
   border: none !important;
 }
 /* HA 的 .toolbar 自带一条 1px 分隔线，去掉 */
-${P} .toolbar { position: relative !important; border-bottom: none !important; }
+${P} .toolbar {
+  position: relative !important;
+  border-bottom: none !important;
+  /* HA 桌面工具栏默认右内边距 12px；收至 4px，让 ⋮ 外缘与屏幕保持 5px */
+  padding-right: calc(9px + env(safe-area-inset-right, 0px)) !important;
+}
 /* 原生 ☰ 在桌面端本来就是空的，按侧栏状态显示自定义 .glass-menu */
 ${P} ha-menu-button { display: none !important; }
 
@@ -358,7 +389,7 @@ ${P} .glass-custom-dock .glass-custom-tab[data-glass-active] {
 ${P} .glass-title {
   position: absolute !important;
   left: 50% !important;
-  top: 50% !important;
+  top: calc(50% + var(--g-bar-top) - 5px) !important;
   transform: translate(-50%, -50%) !important;
   margin: 0 !important;
   padding: 0 !important;
@@ -375,8 +406,8 @@ ${P} .glass-title {
 
 ${P} .glass-menu {
   position: absolute;
-  left: 16px;
-  top: 50%;
+  left: var(--g-edge-left);
+  top: calc(50% + var(--g-bar-top) - 5px);
   transform: translateY(-50%);
   width: var(--g-btn);
   height: var(--g-btn);
@@ -395,6 +426,14 @@ ${P} .glass-menu {
   z-index: 30;
   -webkit-tap-highlight-color: transparent;
   transition: transform .12s ease;
+}
+:host([glass-sidebar-open]) .glass-menu {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+:host([glass-overflow-open]) .action-items ha-dropdown ha-icon-button {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 ${P} .glass-menu svg {
   width: var(--g-btn-icon);
@@ -433,7 +472,9 @@ ${P} .action-items ha-dropdown ha-icon-button {
   position: relative !important;
   width: var(--g-btn) !important;
   height: var(--g-btn) !important;
-  margin: 0 4px 0 0 !important;
+  /* toolbar 自带 4px 右内边距；再留 1px，按钮圆边距视口正好 5px */
+  margin: 0 1px 0 0 !important;
+  top: calc(var(--g-bar-top) - 5px) !important;
   padding: 0 !important;
   border-radius: 50% !important;
   background: var(--g-dock-band), var(--g-dock-tint) !important;
@@ -646,6 +687,33 @@ ${P} hui-view-container {
     return { ha, main, drawer, panel, root };
   }
 
+  // Search the active drawer's light / open shadow DOM for the current page's
+  // top-app-bar surface (dashboard and non-dashboard pages use different hosts).
+  function findInTree(node, selector) {
+    const seen = new Set();
+    const walk = (current) => {
+      if (!current || seen.has(current)) return null;
+      seen.add(current);
+      let found = null;
+      try {
+        found = current.querySelector && current.querySelector(selector);
+      } catch (e) {
+        /* ignore */
+      }
+      if (found) return found;
+      if (current.shadowRoot) {
+        found = walk(current.shadowRoot);
+        if (found) return found;
+      }
+      for (const child of current.children || []) {
+        found = walk(child);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(node);
+  }
+
   function isTargetDashboard() {
     if (CONFIG.dashboards.includes("*")) return true;
     const seg = location.pathname.split("/").filter(Boolean);
@@ -663,12 +731,11 @@ ${P} hui-view-container {
     );
   }
 
-  // ---- 宽屏也收起侧边栏 --------------------------------------------------
-  // hass.dockedSidebar = "always_hidden" 时，HA 会把抽屉切成 modal 模式：
-  // 侧边栏默认不显示，☰ 打开一个大层面板 —— 也就是手机上的行为。
-  // 这个值会存在 localStorage['dockedSidebar'] 里，属于 HA 原生设置。
+  // ---- 仅迁移旧版脚本留下的侧栏设置 --------------------------------------
+  // 旧版曾强制把侧栏改成 always_hidden，并写入此标记。只对有旧标记的实例
+  // 恢复一次 HA 默认 auto；之后永远不再写 dockedSidebar，尊重用户自己的设置。
   const SIDEBAR_FLAG = "glass-ui.sidebar-collapsed";
-  let sidebarEnsured = false;
+  let legacySidebarMigrated = false;
 
   function dockSidebar(value) {
     const ha = document.querySelector("home-assistant");
@@ -682,32 +749,20 @@ ${P} hui-view-container {
     );
   }
 
-  function ensureSidebarMode() {
-    if (sidebarEnsured) return;
+  function migrateLegacySidebarMode() {
+    if (legacySidebarMigrated) return;
     const { ha } = parts();
-    const docked = ha && ha.hass && ha.hass.dockedSidebar;
-    if (!docked) return;
-    sidebarEnsured = true;
-
-    if (CONFIG.collapseSidebarOnWide) {
-      if (docked !== "always_hidden") {
-        dockSidebar("always_hidden");
-        try {
-          localStorage.setItem(SIDEBAR_FLAG, "1");
-        } catch (e) {
-          /* ignore */
-        }
-      }
-    } else if (docked === "always_hidden") {
-      // 之前被本脚本收起过的话，恢复成常驻窄条
-      let ours = false;
-      try {
-        ours = localStorage.getItem(SIDEBAR_FLAG) === "1";
-        if (ours) localStorage.removeItem(SIDEBAR_FLAG);
-      } catch (e) {
-        /* ignore */
-      }
-      if (ours) dockSidebar("auto");
+    if (!ha || !ha.hass || !ha.hass.dockedSidebar) return;
+    legacySidebarMigrated = true;
+    let ours = false;
+    try {
+      ours = localStorage.getItem(SIDEBAR_FLAG) === "1";
+      if (ours) localStorage.removeItem(SIDEBAR_FLAG);
+    } catch (e) {
+      /* ignore */
+    }
+    if (ours && ha.hass.dockedSidebar === "always_hidden") {
+      dockSidebar("auto");
     }
   }
 
@@ -899,9 +954,324 @@ ${P} hui-view-container {
     if (popup.getAttribute("distance") !== want) {
       popup.setAttribute("distance", want);
     }
+    const edge = String(CONFIG.overflowMenuEdge ?? 5);
+    if (popup.getAttribute("shift-padding") !== edge) {
+      popup.setAttribute("shift-padding", edge);
+    }
   }
 
   // 菜单打开时铺一层透明遮罩：点菜单以外的地方只关菜单，不会点到下面的卡片
+  const SIDEBAR_GLASS_STYLE_ID = "glass-sidebar-frame-style";
+  const SIDEBAR_DOCKED_STYLE_ID = "glass-sidebar-docked-style";
+  const SIDEBAR_PAGE_BG_STYLE_ID = "glass-sidebar-page-background-style";
+  const SIDEBAR_BACKDROP_STYLE_ID = "glass-sidebar-backdrop-style";
+  const SIDEBAR_CONTENT_STYLE_ID = "glass-sidebar-content-style";
+  const SIDEBAR_GLASS_VARS = [
+    "--g-dock-tint",
+    "--g-sidebar-tint",
+    "--g-dock-bottom",
+    "--g-edge-top",
+    "--g-edge-left",
+    "--g-dock-filter",
+    "--g-dock-band",
+    "--g-dock-outer",
+    "--g-rim",
+    "--g-rim-w",
+    "--g-dock-radius",
+  ];
+  const sidebarOriginalVars = new WeakMap();
+
+  // Frame the native HA drawer without changing its contents or width.
+  // Copy glass tokens from hui-root because the drawer is outside its shadow tree.
+  function styleSidebarFrame(drawer, root, light) {
+    if (!drawer || !drawer.shadowRoot) return;
+    const wa = drawer.shadowRoot.querySelector("wa-drawer");
+    // 三种侧栏状态都要装进同一套玻璃圆角框：
+    //   modal             —— ☰ 呼出的悬浮抽屉（手机 / PC 收起侧栏时）
+    //   docked (expanded) —— 宽屏常驻展开
+    //   docked (collapsed)—— 宽屏常驻折叠成图标窄条
+    const modal =
+      drawer.getAttribute("type") === "modal" ||
+      !!(wa && wa.getAttribute("type") === "modal");
+    // docked 模式下没有 wa-drawer，CSS 变量放到 ha-drawer 上，
+    // 这样它的 shadow 样式和 ha-sidebar 的 shadow 样式都能继承到。
+    const target = modal ? wa : drawer;
+    if (!target) return;
+    if (root) {
+      root.toggleAttribute("glass-sidebar-docked", !modal);
+    }
+    // Extend only the active page's top-bar background behind the floating
+    // sidebar. Keep the toolbar and all its controls at their native positions.
+    let pageHeader =
+      root && root.shadowRoot && root.shadowRoot.querySelector(".header");
+    if (!pageHeader && !modal) {
+      const topAppBar = findInTree(drawer, "ha-top-app-bar-fixed");
+      pageHeader =
+        topAppBar &&
+        topAppBar.shadowRoot &&
+        (topAppBar.shadowRoot.querySelector("header") ||
+          topAppBar.shadowRoot.querySelector(".top-app-bar"));
+    }
+    if (!modal && pageHeader) {
+      const headerStyle = getComputedStyle(pageHeader);
+      drawer.style.setProperty(
+        "--g-page-header-bg",
+        headerStyle.backgroundColor || "transparent"
+      );
+      drawer.style.setProperty(
+        "--g-page-header-image",
+        headerStyle.backgroundImage || "none"
+      );
+      drawer.style.setProperty(
+        "--g-page-header-height",
+        Math.round(pageHeader.getBoundingClientRect().height) + "px"
+      );
+    } else {
+      drawer.style.removeProperty("--g-page-header-bg");
+      drawer.style.removeProperty("--g-page-header-image");
+      drawer.style.removeProperty("--g-page-header-height");
+    }
+    // 切模式时清掉另一种模式留下的样式 / 变量
+    restoreSidebarFrame(drawer, modal);
+
+    const rootStyle = root ? getComputedStyle(root) : null;
+    const fallbackVars = {
+      "--g-dock-tint": light ? "rgba(255, 255, 255, .24)" : "rgba(14, 14, 18, .16)",
+      "--g-sidebar-tint": light ? "rgba(255, 255, 255, .90)" : "rgba(14, 14, 18, .90)",
+      "--g-dock-bottom": window.matchMedia("(min-width: 871px)").matches
+        ? String(CONFIG.dock.bottomDesktop ?? 5) + "px"
+        : dockBottom,
+      "--g-edge-top": "env(safe-area-inset-top, 0px)",
+      "--g-edge-left": "calc(10px + env(safe-area-inset-left, 0px))",
+      "--g-dock-filter": light
+        ? "blur(5px) saturate(185%) brightness(1.02)"
+        : "blur(5px) saturate(180%) brightness(1.10)",
+      "--g-dock-band": light
+        ? "linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,0) 100%)"
+        : "linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.05) 50%, rgba(255,255,255,.035) 100%)",
+      "--g-dock-outer": light
+        ? "0 14px 32px -14px rgba(0,0,0,.22), 0 2px 8px rgba(0,0,0,.06)"
+        : "0 18px 40px -16px rgba(0,0,0,.70), 0 3px 10px rgba(0,0,0,.25)",
+      "--g-rim": light
+        ? "linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,255,255,.85) 34%, rgba(0,0,0,.05) 78%, rgba(0,0,0,.09) 100%)"
+        : "linear-gradient(135deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.33) 18%, rgba(255,255,255,.10) 42%, rgba(255,255,255,.06) 58%, rgba(255,255,255,.18) 82%, rgba(255,255,255,.40) 100%)",
+      "--g-rim-w": ".5px",
+      "--g-dock-radius": String(dockRadius) + "px",
+    };
+
+    if (!sidebarOriginalVars.has(target)) {
+      sidebarOriginalVars.set(
+        target,
+        new Map(
+          SIDEBAR_GLASS_VARS.map((name) => [
+            name,
+            {
+              value: target.style.getPropertyValue(name),
+              priority: target.style.getPropertyPriority(name),
+            },
+          ])
+        )
+      );
+    }
+    SIDEBAR_GLASS_VARS.forEach((name) => {
+      const value =
+        (rootStyle && rootStyle.getPropertyValue(name).trim()) || fallbackVars[name];
+      if (value && target.style.getPropertyValue(name) !== value) {
+        target.style.setProperty(name, value);
+      }
+    });
+
+    if (modal && !wa.shadowRoot.getElementById(SIDEBAR_GLASS_STYLE_ID)) {
+      const frameStyle = document.createElement("style");
+      frameStyle.id = SIDEBAR_GLASS_STYLE_ID;
+      frameStyle.textContent = [
+        ".drawer {",
+        "  inset: var(--g-edge-top) auto var(--g-dock-bottom) var(--g-edge-left) !important;",
+        "  height: auto !important;",
+        "  max-height: none !important;",
+        "  border: none !important;",
+        "  border-radius: var(--g-dock-radius, 30px) !important;",
+        "  overflow: hidden !important;",
+        "  background: var(--g-dock-band), var(--g-sidebar-tint, var(--g-dock-tint)) !important;",
+        "  -webkit-backdrop-filter: none !important;",
+        "  backdrop-filter: none !important;",
+        "  box-shadow: var(--g-dock-outer) !important;",
+        "}",
+        ".drawer::before {",
+        "  content: \"\";",
+        "  position: absolute;",
+        "  inset: 0;",
+        "  border-radius: inherit;",
+        "  padding: var(--g-rim-w, 1px);",
+        "  background: var(--g-rim);",
+        "  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);",
+        "  -webkit-mask-composite: xor;",
+        "  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);",
+        "  mask-composite: exclude;",
+        "  pointer-events: none;",
+        "  z-index: 10;",
+        "}",
+        ".drawer > .body {",
+        "  height: 100%;",
+        "  min-height: 0;",
+        "  border-radius: inherit;",
+        "  background: transparent !important;",
+        "}",
+      ].join("\n");
+      wa.shadowRoot.appendChild(frameStyle);
+    }
+
+    // 常驻侧栏（展开 / 折叠窄条）没有 wa-drawer，直接给 ha-drawer 里的
+    // .sidebar-shell 套同一套玻璃圆角框；内容宽度仍由 HA 的 --ha-sidebar-width 决定。
+    const oldDockedStyle =
+      !modal && drawer.shadowRoot.getElementById(SIDEBAR_DOCKED_STYLE_ID);
+    if (
+      oldDockedStyle &&
+      !oldDockedStyle.textContent.includes("--g-page-header-height")
+    ) {
+      oldDockedStyle.remove();
+    }
+    if (!modal && !drawer.shadowRoot.getElementById(SIDEBAR_DOCKED_STYLE_ID)) {
+      const dockedStyle = document.createElement("style");
+      dockedStyle.id = SIDEBAR_DOCKED_STYLE_ID;
+      dockedStyle.textContent = [
+        // Extend the active header's background underneath the floating sidebar.
+        // The bar itself and its controls remain untouched.
+        ".layout::before {",
+        "  content: \"\";",
+        "  position: fixed;",
+        "  inset: 0 auto auto 0;",
+        "  width: calc(var(--ha-sidebar-width, 0px) + var(--g-edge-left, 0px));",
+        "  height: var(--g-page-header-height, var(--header-height, 56px));",
+        "  background: var(--g-page-header-image, none) var(--g-page-header-bg, var(--app-header-background-color, transparent));",
+        "  pointer-events: none;",
+        "  z-index: 5;",
+        "}",
+        ".sidebar-shell {",
+        "  inset: var(--g-edge-top) auto var(--g-dock-bottom) var(--g-edge-left) !important;",
+        "  width: var(--ha-sidebar-width) !important;",
+        "  height: auto !important;",
+        "  border: none !important;",
+        "  border-inline-end: none !important;",
+        "  border-radius: var(--g-dock-radius, 30px) !important;",
+        "  background: var(--g-dock-band), var(--g-sidebar-tint, var(--g-dock-tint)) !important;",
+        "  -webkit-backdrop-filter: none !important;",
+        "  backdrop-filter: none !important;",
+        "  box-shadow: var(--g-dock-outer) !important;",
+        "}",
+        ".sidebar-shell::before {",
+        "  content: \"\";",
+        "  position: absolute;",
+        "  inset: 0;",
+        "  border-radius: inherit;",
+        "  padding: var(--g-rim-w, 1px);",
+        "  background: var(--g-rim);",
+        "  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);",
+        "  -webkit-mask-composite: xor;",
+        "  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);",
+        "  mask-composite: exclude;",
+        "  pointer-events: none;",
+        "  z-index: 10;",
+        "}",
+        ".app-content {",
+        "  padding-inline-start: calc(var(--ha-sidebar-width) + var(--g-edge-left)) !important;",
+        "}",
+      ].join("\n");
+      drawer.shadowRoot.appendChild(dockedStyle);
+    }
+
+    // Lovelace's configured background is a separate full-view layer. Extend
+    // that layer left underneath the sidebar without moving cards or controls.
+    if (root && root.shadowRoot) {
+      let pageBgStyle = root.shadowRoot.getElementById(SIDEBAR_PAGE_BG_STYLE_ID);
+      if (!pageBgStyle) {
+        pageBgStyle = document.createElement("style");
+        pageBgStyle.id = SIDEBAR_PAGE_BG_STYLE_ID;
+        pageBgStyle.textContent = [
+          ":host([glass-sidebar-docked]) hui-view-background {",
+          "  left: calc(0px - var(--ha-sidebar-width, 0px) - var(--g-edge-left, 0px)) !important;",
+          "  right: auto !important;",
+          "  width: calc(100% + var(--ha-sidebar-width, 0px) + var(--g-edge-left, 0px)) !important;",
+          "  max-width: none !important;",
+          "}",
+        ].join("\n");
+        root.shadowRoot.appendChild(pageBgStyle);
+      }
+    }
+
+    if (modal && !drawer.shadowRoot.getElementById(SIDEBAR_BACKDROP_STYLE_ID)) {
+      const backdropStyle = document.createElement("style");
+      backdropStyle.id = SIDEBAR_BACKDROP_STYLE_ID;
+      backdropStyle.textContent = [
+        "wa-drawer::part(dialog)::backdrop {",
+        "  background: rgba(0, 0, 0, 0.25) !important;",
+        "  -webkit-backdrop-filter: none !important;",
+        "  backdrop-filter: none !important;",
+        "}",
+      ].join("\n");
+      drawer.shadowRoot.appendChild(backdropStyle);
+    }
+
+    const sidebar = drawer.querySelector("ha-sidebar");
+    const sidebarShadow = sidebar && sidebar.shadowRoot;
+    if (sidebarShadow && !sidebarShadow.getElementById(SIDEBAR_CONTENT_STYLE_ID)) {
+      const contentStyle = document.createElement("style");
+      contentStyle.id = SIDEBAR_CONTENT_STYLE_ID;
+      contentStyle.textContent = [
+        ":host {",
+        "  background: transparent !important;",
+        // 抽屉外框已经用 --g-edge-* / --g-dock-bottom 让出了刘海和 Home 指示条，
+        // 这里必须把 HA 侧栏内部的 safe-area 再归零，否则移动端上下会多留一份，
+        // 顶端标题和底部账号会比电脑端离边缘更远。
+        "  --safe-area-inset-top: 0px !important;",
+        "  --safe-area-inset-bottom: 0px !important;",
+        "  --safe-area-inset-left: 0px !important;",
+        "  --safe-area-inset-right: 0px !important;",
+        "  padding-bottom: 0 !important;",
+        "}",
+        ".menu {",
+        "  background: transparent !important;",
+        "  height: var(--header-height, 56px) !important;",
+        "  padding-top: 0 !important;",
+        "}",
+        "ha-list-nav { margin-left: 0 !important; }",
+      ].join("\n");
+      sidebarShadow.appendChild(contentStyle);
+    }
+  }
+
+  function restoreSidebarVars(el) {
+    if (!el) return;
+    const original = sidebarOriginalVars.get(el);
+    if (!original) return;
+    original.forEach(({ value, priority }, name) => {
+      if (value) el.style.setProperty(name, value, priority);
+      else el.style.removeProperty(name);
+    });
+    sidebarOriginalVars.delete(el);
+  }
+
+  // keepModal=true 时清掉常驻侧栏样式（当前是抽屉）；
+  // keepModal=false 时清掉抽屉样式（当前是常驻侧栏）。
+  function restoreSidebarFrame(drawer, keepModal) {
+    const sr = drawer && drawer.shadowRoot;
+    if (!sr) return;
+    const wa = sr.querySelector("wa-drawer");
+    if (keepModal) {
+      const docked = sr.getElementById(SIDEBAR_DOCKED_STYLE_ID);
+      if (docked) docked.remove();
+      restoreSidebarVars(drawer);
+    } else {
+      const backdrop = sr.getElementById(SIDEBAR_BACKDROP_STYLE_ID);
+      if (backdrop) backdrop.remove();
+      const frame =
+        wa && wa.shadowRoot && wa.shadowRoot.getElementById(SIDEBAR_GLASS_STYLE_ID);
+      if (frame) frame.remove();
+      restoreSidebarVars(wa);
+    }
+    // ha-sidebar 的内容样式三种模式共用，切模式时保留
+  }
+
   let menuScrim = null;
   let menuObserver = null;
   let swallowUntil = 0;
@@ -924,10 +1294,12 @@ ${P} hui-view-container {
   function syncMenuScrim(root, toolbar) {
     const dd = toolbar.querySelector(".action-items ha-dropdown");
     if (!dd) return;
+    root.toggleAttribute("glass-overflow-open", dd.hasAttribute("open"));
 
     if (!menuObserver) {
       menuObserver = new MutationObserver(() => {
         const opened = dd.hasAttribute("open");
+        root.toggleAttribute("glass-overflow-open", opened);
         if (opened) {
           if (!menuScrim || !menuScrim.isConnected) {
             menuScrim = document.createElement("div");
@@ -1790,6 +2162,19 @@ ${P} hui-view-container {
     const tabs = dockTabs(toolbar);
     if (!tabs.length) return;
 
+    // HA may render horizontal scroll arrows when it thinks the native tab row
+    // overflows. The dock is a fixed-width capsule and must never show these
+    // controls at any viewport width, so hide both scroll buttons inside its
+    // shadow root (the tab labels themselves remain clipped/ellipsized).
+    tg.shadowRoot.querySelectorAll(".scroll-button").forEach((button) => {
+      if (button.style.getPropertyValue("display") !== "none") {
+        button.style.setProperty("display", "none", "important");
+      }
+      if (!button.hasAttribute("aria-hidden")) {
+        button.setAttribute("aria-hidden", "true");
+      }
+    });
+
     attachDockDrag(tg, tabsEl);
 
     // .nav 是 HA 自己的横向滚动容器（overflow:auto，没有 part 名），
@@ -1960,16 +2345,34 @@ ${P} hui-view-container {
   let observedRoot = null;
   let resizeObserver = null;
   let dockCount = 0;
+  let observedSidebarRoot = null;
+  let observedSidebarDrawer = null;
+  let sidebarDrawerObserver = null;
+
+  function syncSidebarButtonState(root, drawer) {
+    if (!root) return;
+    const sync = () =>
+      root.toggleAttribute("glass-sidebar-open", !!(drawer && drawer.hasAttribute("open")));
+    sync();
+    if (root === observedSidebarRoot && drawer === observedSidebarDrawer) return;
+    if (sidebarDrawerObserver) sidebarDrawerObserver.disconnect();
+    observedSidebarRoot = root;
+    observedSidebarDrawer = drawer;
+    sidebarDrawerObserver = null;
+    if (drawer) {
+      sidebarDrawerObserver = new MutationObserver(sync);
+      sidebarDrawerObserver.observe(drawer, { attributes: true, attributeFilter: ["open"] });
+    }
+  }
 
   function refresh() {
-    const { root, panel, ha } = parts();
+    const { root, panel, ha, drawer } = parts();
+    const themes = ha && ha.hass && ha.hass.themes;
+    const light = Boolean(themes && themes.darkMode === false);
+    styleSidebarFrame(drawer, root, light);
     if (!root || !root.shadowRoot) return;
     const toolbar = root.shadowRoot.querySelector(".toolbar");
     if (!toolbar) return;
-
-    // 暗色 / 亮色两套配色，跟随 HA 的深浅色设置
-    const themes = ha && ha.hass && ha.hass.themes;
-    const light = Boolean(themes && themes.darkMode === false);
     if (root.hasAttribute("glass-light") !== light) {
       root.toggleAttribute("glass-light", light);
     }
@@ -1989,8 +2392,10 @@ ${P} hui-view-container {
       return;
     }
 
-    ensureSidebarMode();
+    migrateLegacySidebarMode();
     injectStyle(root);
+    styleSidebarFrame(drawer, root, light);
+    syncSidebarButtonState(root, drawer);
     lockRootScroll(root);
 
     // 切页后新视图从页面顶部开始（滚动现在在内容层里，窗口不再是滚动容器）
