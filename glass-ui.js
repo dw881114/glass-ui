@@ -198,7 +198,7 @@
      所以这里用固定值，不能再叠加 env(safe-area-inset-top)，否则 iOS 会多下移一份。 */
   --g-bar-top: 10px;
   /* 侧栏抽屉是 fixed 到视口的，需要自己叠加安全区 */
-  --g-edge-top: env(safe-area-inset-top, 0px);
+  --g-edge-top: calc(5px + env(safe-area-inset-top, 0px));
   --g-edge-left: calc(10px + env(safe-area-inset-left, 0px));
   --g-edge-right: calc(10px + env(safe-area-inset-right, 0px));
 }
@@ -472,7 +472,7 @@ ${P} .action-items ha-dropdown ha-icon-button {
   position: relative !important;
   width: var(--g-btn) !important;
   height: var(--g-btn) !important;
-  /* toolbar 自带 4px 右内边距；再留 1px，按钮圆边距视口正好 5px */
+  /* 移动端 toolbar 与视口对齐：右内边距 9px + 按钮外边距 1px = 10px */
   margin: 0 1px 0 0 !important;
   top: calc(var(--g-bar-top) - 5px) !important;
   padding: 0 !important;
@@ -483,6 +483,13 @@ ${P} .action-items ha-dropdown ha-icon-button {
   box-shadow: var(--g-btn-shadow) !important;
   color: var(--g-btn-fg) !important;
   overflow: hidden;
+}
+/* 桌面端 HA 的 toolbar 右侧会多延伸一个滚动条槽宽；多内缩 10px，
+   让圆钮离可视屏幕边缘仍与移动端一样保持 10px。 */
+@media (min-width: 871px) {
+  ${P} .action-items ha-dropdown ha-icon-button {
+    margin-right: 11px !important;
+  }
 }
 ${P} .action-items ha-dropdown ha-icon-button ha-button {
   --ha-button-height: var(--g-btn);
@@ -712,6 +719,97 @@ ${P} hui-view-container {
       return null;
     };
     return walk(node);
+  }
+
+  // Android's status bar is outside the webpage. `theme-color` cannot make it
+  // genuinely transparent in the Companion WebView, but matching its solid
+  // color to the top edge of the active app bar makes it visually blend in.
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  let statusColorContext = null;
+
+  function parseStatusColor(value) {
+    if (!value) return null;
+    if (!statusColorContext) {
+      statusColorContext = document.createElement("canvas").getContext("2d");
+    }
+    if (!statusColorContext) return null;
+    statusColorContext.fillStyle = "#010203";
+    statusColorContext.fillStyle = value;
+    const normalized = statusColorContext.fillStyle;
+    const hex = normalized.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+    if (hex) {
+      let value = hex[1];
+      if (value.length === 3 || value.length === 4) {
+        value = Array.from(value, (digit) => digit + digit).join("");
+      }
+      const hasAlpha = value.length === 8;
+      const n = parseInt(value.slice(0, 6), 16);
+      return {
+        r: (n >> 16) & 255,
+        g: (n >> 8) & 255,
+        b: n & 255,
+        a: hasAlpha ? parseInt(value.slice(6, 8), 16) / 255 : 1,
+      };
+    }
+    const rgb = normalized.match(
+      /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/i
+    );
+    if (!rgb) return null;
+    return {
+      r: Number(rgb[1]),
+      g: Number(rgb[2]),
+      b: Number(rgb[3]),
+      a: rgb[4] === undefined ? 1 : Number(rgb[4]),
+    };
+  }
+
+  function androidStatusBarColor(header, root) {
+    const base =
+      parseStatusColor(
+        (root && getComputedStyle(root).getPropertyValue("--primary-background-color")) ||
+          getComputedStyle(document.documentElement).getPropertyValue(
+            "--primary-background-color"
+          )
+      ) || { r: 17, g: 17, b: 17, a: 1 };
+    if (!header) return base;
+
+    const style = getComputedStyle(header);
+    const solid = parseStatusColor(style.backgroundColor);
+    if (solid && solid.a >= 0.99) return solid;
+
+    // For glass gradients, match the first (topmost) color stop.
+    const stop = (style.backgroundImage || "").match(
+      /rgba?\([^)]*\)|#[0-9a-f]{3,8}\b/i
+    );
+    const foreground = stop && parseStatusColor(stop[0]);
+    if (!foreground) return solid && solid.a > 0 ? solid : base;
+    const a = Math.max(0, Math.min(1, foreground.a));
+    return {
+      r: foreground.r * a + base.r * (1 - a),
+      g: foreground.g * a + base.g * (1 - a),
+      b: foreground.b * a + base.b * (1 - a),
+      a: 1,
+    };
+  }
+
+  function syncAndroidStatusBarColor(header, root) {
+    if (!isAndroid) return;
+    const color = androidStatusBarColor(header, root);
+    const hex = "#" + [color.r, color.g, color.b]
+      .map((v) => Math.round(v).toString(16).padStart(2, "0"))
+      .join("");
+    let metas = Array.from(
+      document.head.querySelectorAll('meta[name="theme-color"]')
+    );
+    if (!metas.length) {
+      const meta = document.createElement("meta");
+      meta.name = "theme-color";
+      document.head.appendChild(meta);
+      metas = [meta];
+    }
+    metas.forEach((meta) => {
+      if (meta.content !== hex) meta.content = hex;
+    });
   }
 
   function isTargetDashboard() {
@@ -978,6 +1076,7 @@ ${P} hui-view-container {
     "--g-rim",
     "--g-rim-w",
     "--g-dock-radius",
+    "--g-sidebar-radius",
   ];
   const sidebarOriginalVars = new WeakMap();
 
@@ -1004,7 +1103,7 @@ ${P} hui-view-container {
     // sidebar. Keep the toolbar and all its controls at their native positions.
     let pageHeader =
       root && root.shadowRoot && root.shadowRoot.querySelector(".header");
-    if (!pageHeader && !modal) {
+    if (!pageHeader) {
       const topAppBar = findInTree(drawer, "ha-top-app-bar-fixed");
       pageHeader =
         topAppBar &&
@@ -1012,6 +1111,7 @@ ${P} hui-view-container {
         (topAppBar.shadowRoot.querySelector("header") ||
           topAppBar.shadowRoot.querySelector(".top-app-bar"));
     }
+    syncAndroidStatusBarColor(pageHeader, root);
     if (!modal && pageHeader) {
       const headerStyle = getComputedStyle(pageHeader);
       drawer.style.setProperty(
@@ -1041,7 +1141,7 @@ ${P} hui-view-container {
       "--g-dock-bottom": window.matchMedia("(min-width: 871px)").matches
         ? String(CONFIG.dock.bottomDesktop ?? 5) + "px"
         : dockBottom,
-      "--g-edge-top": "env(safe-area-inset-top, 0px)",
+      "--g-edge-top": "calc(5px + env(safe-area-inset-top, 0px))",
       "--g-edge-left": "calc(10px + env(safe-area-inset-left, 0px))",
       "--g-dock-filter": light
         ? "blur(5px) saturate(185%) brightness(1.02)"
@@ -1057,6 +1157,7 @@ ${P} hui-view-container {
         : "linear-gradient(135deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.33) 18%, rgba(255,255,255,.10) 42%, rgba(255,255,255,.06) 58%, rgba(255,255,255,.18) 82%, rgba(255,255,255,.40) 100%)",
       "--g-rim-w": ".5px",
       "--g-dock-radius": String(dockRadius) + "px",
+      "--g-sidebar-radius": "20px",
     };
 
     if (!sidebarOriginalVars.has(target)) {
@@ -1090,7 +1191,7 @@ ${P} hui-view-container {
         "  height: auto !important;",
         "  max-height: none !important;",
         "  border: none !important;",
-        "  border-radius: var(--g-dock-radius, 30px) !important;",
+        "  border-radius: var(--g-sidebar-radius, 20px) !important;",
         "  overflow: hidden !important;",
         "  background: var(--g-dock-band), var(--g-sidebar-tint, var(--g-dock-tint)) !important;",
         "  -webkit-backdrop-filter: none !important;",
@@ -1153,7 +1254,7 @@ ${P} hui-view-container {
         "  height: auto !important;",
         "  border: none !important;",
         "  border-inline-end: none !important;",
-        "  border-radius: var(--g-dock-radius, 30px) !important;",
+        "  border-radius: var(--g-sidebar-radius, 20px) !important;",
         "  background: var(--g-dock-band), var(--g-sidebar-tint, var(--g-dock-tint)) !important;",
         "  -webkit-backdrop-filter: none !important;",
         "  backdrop-filter: none !important;",
@@ -1231,7 +1332,7 @@ ${P} hui-view-container {
         "}",
         ".menu {",
         "  background: transparent !important;",
-        "  height: var(--header-height, 56px) !important;",
+        "  height: calc(var(--header-height, 56px) - 5px) !important;",
         "  padding-top: 0 !important;",
         "}",
         "ha-list-nav { margin-left: 0 !important; }",
@@ -1942,6 +2043,8 @@ ${P} hui-view-container {
     container.dataset.glassPageSwipe = "1";
 
     let touch = null;
+    // Reserve the leftmost strip for iOS's native edge-swipe sidebar gesture.
+    const sidebarEdgeSwipeWidth = 24;
     const interactiveSelector = [
       "button",
       "a",
@@ -2041,6 +2144,14 @@ ${P} hui-view-container {
         touch.y = point.clientY;
         const dx = touch.x - touch.startX;
         const dy = touch.y - touch.startY;
+
+        // A rightward swipe beginning at the left screen edge belongs to HA's
+        // drawer gesture. Drop it before the page-swipe handler can prevent it
+        // or switch to the previous Lovelace tab.
+        if (touch.startX <= sidebarEdgeSwipeWidth && dx > 0) {
+          touch = null;
+          return;
+        }
 
         if (!touch.horizontal) {
           if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
