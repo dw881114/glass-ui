@@ -10,9 +10,9 @@
 
 **它只是外观层。** ☰ 走原生 `hass-toggle-menu`，⋮ 就是原生 `ha-dropdown`，dock 就是原生 `ha-tab-group` —— 切页、菜单、侧边栏全部是 HA 自己的逻辑，不会出现"点了没反应"或"按钮是假的"。
 
-![Glass UI dark mode with floating transparent sidebar](images/screenshot-dark.png)
+![Glass UI mobile view with a floating transparent sidebar](images/screenshot-dark.png)
 
-*深色模式框架示意图，突出显示悬浮侧栏与延伸到侧栏下方的页面背景。*
+*移动端抽屉示意图，展示玻璃侧栏浮在页面背景上；为突出框架，示意图省略了页面主体内容。*
 
 - 适用：Home Assistant 2024.1+（2026.x 已实测）
 - 不依赖 card-mod / kiosk-mode / 任何自定义卡片
@@ -118,7 +118,7 @@ window.GLASS_UI_CONFIG = {
 | dock 外观 | 无论屏幕宽度如何，都不显示底栏左右滚动箭头 |
 | 桌面网页端 dock | 距视口底边 5px |
 | 按住 / 拖动 dock | 高亮块跟手横移 |
-| 页面左右滑动 | 左滑切到下一个 tab，右滑切到上一个；至少 60px；到边界不循环 |
+| 页面左右滑动 | 左滑切到下一个 tab，右滑切到上一个；至少 60px；到边界不循环；从屏幕左边缘向右滑时优先交给侧栏抽屉 |
 | 触觉反馈 | 长按、停留切页或页面横滑切页时反馈；HA Companion iOS / Android 使用原生 haptic bridge，普通 Android 浏览器使用 Vibration API（iOS Safari 不支持网页触觉反馈） |
 
 - 页面横滑不会抢占纵向滚动；按钮、滑块等交互控件和横向滚动区域不触发切页；子视图不触发
