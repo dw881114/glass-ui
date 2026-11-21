@@ -6,10 +6,13 @@
 - 居中标题
 - 右上 ⋮
 - 底部玻璃胶囊 dock
+- 透明玻璃侧栏：常驻 / 抽屉统一圆角框，页面顶栏与背景延伸到侧栏下方，侧栏悬浮其上
 
 **它只是外观层。** ☰ 走原生 `hass-toggle-menu`，⋮ 就是原生 `ha-dropdown`，dock 就是原生 `ha-tab-group` —— 切页、菜单、侧边栏全部是 HA 自己的逻辑，不会出现"点了没反应"或"按钮是假的"。
 
-![Glass UI](images/screenshot-dark.png)
+![Glass UI dark mode with floating transparent sidebar](images/screenshot-dark.png)
+
+*深色模式框架示意图，突出显示悬浮侧栏与延伸到侧栏下方的页面背景。*
 
 - 适用：Home Assistant 2024.1+（2026.x 已实测）
 - 不依赖 card-mod / kiosk-mode / 任何自定义卡片
