@@ -43,7 +43,6 @@
     // 其它内容就按没有标题时正常往下排。
     //   "auto" = 挪到顶栏；"none" = 不显示
     title: "auto",
-    titleBarHeight: 56, // 顶栏高度（标题和 ☰ / ⋮ 同高）
     titleTextSize: 21, // 顶栏标题字号
 
     dock: {
@@ -79,8 +78,7 @@
     },
 
     replaceOverflowIcon: true, // 把原生右上角「+」换成 ⋮（菜单内容仍是 HA 原生的）
-    hideExtraActions: true, // 隐藏原生 搜索 / 语音助手 / 编辑 三个按钮
-    addEditMenuItem: true, // 在 ⋮ 菜单里补一项「编辑仪表盘」（HA 自己有时已带，则自动跳过）
+    addEditMenuItem: false, // 把「编辑仪表盘」补进 ⋮ 菜单（PC 胶囊里已有独立铅笔图标，默认不需要）
     overflowMenuOffset: "auto", // 菜单相对圆钮的垂直偏移："auto" = 直接盖住圆钮；数字 = px（正数往下）
     overflowMenuEdge: 10, // ⋮ 弹出菜单距视口边缘（顶 / 右等）的安全距离
 
@@ -127,7 +125,7 @@
     const out = {};
     const dash = p.get("dashboards");
     if (dash) out.dashboards = dash.split(",").map((s) => s.trim()).filter(Boolean);
-    ["tabLabel", "hideExtraActions", "addEditMenuItem"].forEach(
+    ["tabLabel", "addEditMenuItem"].forEach(
       (k) => {
         if (!p.has(k)) return;
         out[k] = !/^(0|false|no|off)$/i.test(p.get(k));
@@ -200,7 +198,6 @@
   /* 侧栏抽屉是 fixed 到视口的，需要自己叠加安全区 */
   --g-edge-top: calc(5px + env(safe-area-inset-top, 0px));
   --g-edge-left: calc(10px + env(safe-area-inset-left, 0px));
-  --g-edge-right: calc(10px + env(safe-area-inset-right, 0px));
 }
 
 @media (min-width: 871px) {
@@ -215,15 +212,21 @@
 :host([glass-on]) {
   --g-scrim: linear-gradient(180deg, rgba(8,8,10,.86) 0%, rgba(8,8,10,.52) 58%, rgba(8,8,10,0) 100%);
   --g-btn-fg: #f5f5f7;
-  --g-btn-shadow: 0 3px 10px rgba(0,0,0,.35);
   --g-title: #ffffff;
   --g-title-shadow: 0 1px 3px rgba(0,0,0,.45);
+  --g-dock-glass-surface: rgba(69, 69, 69, .50);
+  --g-dock-surface-band: linear-gradient(180deg,
+    rgba(69,69,69,.50) 0%, rgba(69,69,69,.50) 50%, rgba(69,69,69,.50) 100%);
+  /* 侧栏（1.1.1）用的 tint / band */
   --g-dock-tint: rgba(14, 14, 18, .16);
+  --g-dock-band: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.05) 50%, rgba(255,255,255,.035) 100%);
   --g-sidebar-tint: rgba(14, 14, 18, .90);
   --g-dock-filter: blur(5px) saturate(180%) brightness(1.10);
-  --g-dock-band: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.05) 50%, rgba(255,255,255,.035) 100%);
   --g-dock-inner: none;
   --g-dock-outer: 0 18px 40px -16px rgba(0,0,0,.70), 0 3px 10px rgba(0,0,0,.25);
+  --g-dock-rim: linear-gradient(135deg,
+    rgba(93,93,93,.80) 0%, rgba(93,93,93,.80) 25%,
+    rgba(69,69,69,.80) 65%, rgba(93,93,93,.80) 100%);
   --g-rim: linear-gradient(135deg,
     rgba(255,255,255,.55) 0%, rgba(255,255,255,.33) 18%,
     rgba(255,255,255,.10) 42%, rgba(255,255,255,.06) 58%,
@@ -239,22 +242,27 @@
       calc(var(--dark-divider-opacity, .12) * 100%),
     transparent
   );
-  --g-lens-filter: none;
   --g-lens-shadow: none;
 }
 
 :host([glass-on][glass-light]) {
   --g-scrim: linear-gradient(180deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.70) 58%, rgba(255,255,255,0) 100%);
   --g-btn-fg: #16171c;
-  --g-btn-shadow: 0 2px 8px rgba(0,0,0,.12);
   --g-title: #16171c;
   --g-title-shadow: 0 1px 2px rgba(255,255,255,.7);
+  --g-dock-glass-surface: rgba(245, 245, 245, .50);
+  --g-dock-surface-band: linear-gradient(180deg,
+    rgba(245,245,245,.78) 0%, rgba(242,243,245,.74) 45%, rgba(238,240,243,.70) 100%);
+  /* 侧栏（1.1.1）用的 tint / band */
   --g-dock-tint: rgba(255, 255, 255, .24);
+  --g-dock-band: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,0) 100%);
   --g-sidebar-tint: rgba(255, 255, 255, .90);
   --g-dock-filter: blur(5px) saturate(185%) brightness(1.02);
-  --g-dock-band: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,0) 100%);
   --g-dock-inner: none;
   --g-dock-outer: 0 14px 32px -14px rgba(0,0,0,.22), 0 2px 8px rgba(0,0,0,.06);
+  --g-dock-rim: linear-gradient(180deg,
+    rgba(225,225,225,.98) 0%, rgba(223,224,225,.92) 55%,
+    rgba(218,220,223,.88) 100%);
   --g-rim: linear-gradient(180deg,
     rgba(255,255,255,1) 0%, rgba(255,255,255,.85) 34%, rgba(0,0,0,.05) 78%, rgba(0,0,0,.09) 100%);
   --g-rim-w: .5px;
@@ -267,7 +275,6 @@
       calc(var(--dark-divider-opacity, .12) * 100%),
     transparent
   );
-  --g-lens-filter: none;
   --g-lens-shadow: none;
 }
 
@@ -280,6 +287,7 @@
 :host(:not([glass-on])) .glass-menu { display: none !important; }
 
 ${P} .header {
+  z-index: 28 !important;
   background: var(--g-scrim) !important;
   box-shadow: none !important;
   border: none !important;
@@ -287,6 +295,7 @@ ${P} .header {
 /* HA 的 .toolbar 自带一条 1px 分隔线，去掉 */
 ${P} .toolbar {
   position: relative !important;
+  z-index: 28 !important;
   border-bottom: none !important;
   /* HA 桌面工具栏默认右内边距 12px；收至 4px，让 ⋮ 外缘与屏幕保持 5px */
   padding-right: calc(9px + env(safe-area-inset-right, 0px)) !important;
@@ -321,7 +330,7 @@ ${P} .glass-custom-dock {
   padding: var(--g-dock-pad) !important;
   box-sizing: border-box !important;
   border-radius: var(--g-dock-radius) !important;
-  background: var(--g-dock-tint) !important;
+  background: transparent !important;
   -webkit-backdrop-filter: var(--g-dock-filter) !important;
   backdrop-filter: var(--g-dock-filter) !important;
   box-shadow: var(--g-dock-outer) !important;
@@ -334,7 +343,7 @@ ${P} .glass-custom-dock::before {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--g-dock-band);
+  background: var(--g-dock-surface-band);
   pointer-events: none;
   z-index: 0;
 }
@@ -344,7 +353,7 @@ ${P} .glass-custom-dock::after {
   inset: 0;
   border-radius: inherit;
   padding: var(--g-rim-w, 1px);
-  background: var(--g-rim);
+  background: var(--g-dock-rim);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -417,10 +426,11 @@ ${P} .glass-menu {
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: var(--g-dock-band), var(--g-dock-tint);
+  /* 与底栏统一：同一套表面渐变、同样的模糊，边框和阴影见下方共用规则 */
+  background: var(--g-dock-surface-band);
   -webkit-backdrop-filter: var(--g-dock-filter);
   backdrop-filter: var(--g-dock-filter);
-  box-shadow: var(--g-btn-shadow);
+  box-shadow: var(--g-dock-outer);
   color: var(--g-btn-fg);
   cursor: pointer;
   z-index: 30;
@@ -443,7 +453,7 @@ ${P} .glass-menu svg {
 }
 ${P} .glass-menu:active { transform: translateY(-50%) scale(.93); }
 
-/* ☰ / ⋮ 的高光边也用底栏同一条渐变，保证质感一致 */
+/* ☰ / ⋮ 与底栏共用同一条边框渐变，保证质感一致 */
 ${P} .glass-menu::after,
 ${P} .action-items ha-dropdown ha-icon-button::after {
   content: "";
@@ -451,7 +461,7 @@ ${P} .action-items ha-dropdown ha-icon-button::after {
   inset: 0;
   border-radius: 50%;
   padding: var(--g-rim-w, 1px);
-  background: var(--g-rim);
+  background: var(--g-dock-rim);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -477,10 +487,10 @@ ${P} .action-items ha-dropdown ha-icon-button {
   top: calc(var(--g-bar-top) - 5px) !important;
   padding: 0 !important;
   border-radius: 50% !important;
-  background: var(--g-dock-band), var(--g-dock-tint) !important;
+  background: var(--g-dock-surface-band) !important;
   -webkit-backdrop-filter: var(--g-dock-filter) !important;
   backdrop-filter: var(--g-dock-filter) !important;
-  box-shadow: var(--g-btn-shadow) !important;
+  box-shadow: var(--g-dock-outer) !important;
   color: var(--g-btn-fg) !important;
   overflow: hidden;
 }
@@ -500,6 +510,123 @@ ${P} .action-items ha-dropdown ha-icon-button ha-button {
   background: transparent;
 }
 
+/* PC：把顶栏右侧 4 个原生控件（搜索 / 语音 / 编辑 / 更多）装进一个胶囊。
+   控件节点本身被移入胶囊，所以图标与点击行为仍是 HA 原生的。 */
+${P} .glass-actions-capsule {
+  position: fixed;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  border-radius: 999px;
+  z-index: 31;
+  overflow: hidden;
+  -webkit-backdrop-filter: var(--g-dock-filter);
+  backdrop-filter: var(--g-dock-filter);
+  background: var(--g-dock-surface-band);
+  box-shadow: var(--g-dock-outer);
+}
+/* 胶囊内不再给单个按钮画边框：四个按钮共用胶囊这一圈 */
+${P} .glass-actions-capsule ha-icon-button::after,
+${P} .glass-actions-capsule ha-icon-button::before {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+}
+/* 图标缩小 10%（原生 24px → 21.6px），靠按钮自身居中 */
+${P} .glass-actions-capsule ha-icon-button {
+  --mdc-icon-size: 21.6px;
+}
+
+/* 深色模式：边框内侧 3px 的高光渐变。
+   最外圈 1px 亮灰(105,108,113)，向内约 2px 迅速衰减到底色；
+   高光强度随“离垂直中线的高度”变化：上下两极最强，
+   垂直中线 ±10px 范围内完全没有高光（左右顶点也落在该区间内）。 */
+:host([glass-on]:not([glass-light])) .glass-actions-capsule::before,
+:host([glass-on]:not([glass-light])) .toolbar ha-tab-group::part(base)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(105, 108, 113, .55),
+    inset 0 0 2px 1px rgba(105, 108, 113, .28);
+  -webkit-mask-image: linear-gradient(180deg,
+    #000 0,
+    transparent calc(50% - 10px),
+    transparent calc(50% + 10px),
+    #000 100%);
+  mask-image: linear-gradient(180deg,
+    #000 0,
+    transparent calc(50% - 10px),
+    transparent calc(50% + 10px),
+    #000 100%);
+}
+
+/* 明亮模式：边框内侧 3px 高光。
+   最外圈 1px 纯白，向内约 2px 迅速衰减到底色；
+   只有距离上下边缘 5px 之内有高光：边缘处为纯白，往里 5px 渐变到背景色，
+   再往中线方向完全没有高光。 */
+:host([glass-on][glass-light]) .glass-actions-capsule::before,
+:host([glass-on][glass-light]) .toolbar ha-tab-group::part(base)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 1),
+    inset 0 0 2px 1px rgba(255, 255, 255, .30);
+  -webkit-mask-image: linear-gradient(180deg,
+    #000 0,
+    transparent 5px,
+    transparent calc(100% - 5px),
+    #000 100%);
+  mask-image: linear-gradient(180deg,
+    #000 0,
+    transparent 5px,
+    transparent calc(100% - 5px),
+    #000 100%);
+}
+${P} .glass-actions-capsule > ha-icon-button,
+${P} .glass-actions-capsule > ha-dropdown {
+  position: relative !important;
+  top: 0 !important;
+  margin: 0 !important;
+  width: var(--g-btn) !important;
+  height: 100% !important;
+  flex: 0 0 auto !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+${P} .glass-actions-capsule > ha-dropdown ha-icon-button {
+  top: 0 !important;
+  margin: 0 !important;
+  width: var(--g-btn) !important;
+  height: var(--g-btn) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+${P} .glass-actions-capsule::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: var(--g-rim-w, 1px);
+  background: var(--g-dock-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
 /* ==========================================================================
    底部 dock
    ========================================================================== */
@@ -516,7 +643,7 @@ ${P} .toolbar ha-tab-group {
   padding: 0 !important;
   box-sizing: border-box !important;
   border-radius: var(--g-dock-radius) !important;
-  background: var(--g-dock-tint) !important;
+  background: transparent !important;
   -webkit-backdrop-filter: var(--g-dock-filter) !important;
   backdrop-filter: var(--g-dock-filter) !important;
   border: none !important;
@@ -539,7 +666,7 @@ ${P} .toolbar ha-tab-group::part(base) {
   width: 100% !important;
   height: 100% !important;
   border-radius: var(--g-dock-radius) !important;
-  background: var(--g-dock-band) !important;
+  background: var(--g-dock-surface-band) !important;
   box-shadow: var(--g-dock-inner) !important;
 }
 
@@ -552,7 +679,7 @@ ${P} .toolbar ha-tab-group::part(base)::before {
   inset: 0;
   border-radius: inherit;
   padding: var(--g-rim-w, 1px);
-  background: var(--g-rim);
+  background: var(--g-dock-rim);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -653,15 +780,18 @@ ${P} .toolbar ha-tab-group-tab ha-icon {
   color: inherit !important;
 }
 ${P} .toolbar ha-tab-group-tab:active { transform: scale(.96); }
+/* The lens moves under the pointer; don't scale the pressed tab during a drag.
+   That pressed-state transform makes its icon/label appear to jump and snap back. */
+${P} .toolbar ha-tab-group.glass-dragging ha-tab-group-tab:active {
+  transform: none !important;
+}
 
 /* 子视图不进底栏 */
 ${P} .toolbar ha-tab-group-tab[data-glass-hidden] {
   display: none !important;
 }
 
-/* 蓝色只出现在黑色高亮块覆盖到的范围内：
-   每个 tab 上叠一层同样的图标+文字副本，用 clip-path 只露出被块盖住的那一段，
-   其余部分保持未选中色。默认全裁掉，位置由 syncTint() 每帧写入。 */
+/* v1.1.1 tint behavior: show the accent glyph only inside the moving capsule clip. */
 ${P} .toolbar ha-tab-group-tab .glass-tint {
   position: absolute;
   inset: 0;
@@ -681,6 +811,7 @@ ${P} .toolbar ha-tab-group-tab .glass-tint {
 ${P} hui-view-container {
   padding-bottom: calc(var(--g-dock-h) + 38px) !important;
 }
+
 `;
 
   const log = (...a) => console.log("[glass-ui]", ...a);
@@ -1002,11 +1133,15 @@ ${P} hui-view-container {
   }
 
   function injectStyle(root) {
-    if (root.shadowRoot.querySelector("#glass-ui-style")) return;
-    const style = document.createElement("style");
-    style.id = "glass-ui-style";
-    style.textContent = CSS;
-    root.shadowRoot.appendChild(style);
+    let style = root.shadowRoot.querySelector("#glass-ui-style");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "glass-ui-style";
+      root.shadowRoot.appendChild(style);
+    }
+    // A Lovelace root can outlive a module reload. Refresh the existing
+    // stylesheet so cached/older injected CSS cannot override the current tint.
+    if (style.textContent !== CSS) style.textContent = CSS;
   }
 
   function injectMenuButton(toolbar) {
@@ -1182,17 +1317,29 @@ ${P} hui-view-container {
       }
     });
 
-    if (modal && !wa.shadowRoot.getElementById(SIDEBAR_GLASS_STYLE_ID)) {
+    // 注意：常驻侧栏（PC）没有 wa-drawer，wa 为 null，这里必须先判空。
+    if (modal && wa && wa.shadowRoot) {
+      const sidebarShadow = wa.shadowRoot;
+      const sidebarFrameEl = sidebarShadow.getElementById(SIDEBAR_GLASS_STYLE_ID);
+      if (
+        sidebarFrameEl &&
+        !sidebarFrameEl.textContent.includes("--g-sidebar-tint")
+      ) {
+        sidebarFrameEl.remove();
+      }
+      if (!sidebarShadow.getElementById(SIDEBAR_GLASS_STYLE_ID)) {
       const frameStyle = document.createElement("style");
       frameStyle.id = SIDEBAR_GLASS_STYLE_ID;
       frameStyle.textContent = [
         ".drawer {",
+        "  z-index: 30 !important;",
         "  inset: var(--g-edge-top) auto var(--g-dock-bottom) var(--g-edge-left) !important;",
         "  height: auto !important;",
         "  max-height: none !important;",
         "  border: none !important;",
         "  border-radius: var(--g-sidebar-radius, 20px) !important;",
         "  overflow: hidden !important;",
+        // 与底栏统一：同一套表面渐变 / 边框渐变 / 外阴影
         "  background: var(--g-dock-band), var(--g-sidebar-tint, var(--g-dock-tint)) !important;",
         "  -webkit-backdrop-filter: none !important;",
         "  backdrop-filter: none !important;",
@@ -1219,7 +1366,8 @@ ${P} hui-view-container {
         "  background: transparent !important;",
         "}",
       ].join("\n");
-      wa.shadowRoot.appendChild(frameStyle);
+        sidebarShadow.appendChild(frameStyle);
+      }
     }
 
     // 常驻侧栏（展开 / 折叠窄条）没有 wa-drawer，直接给 ha-drawer 里的
@@ -1228,7 +1376,8 @@ ${P} hui-view-container {
       !modal && drawer.shadowRoot.getElementById(SIDEBAR_DOCKED_STYLE_ID);
     if (
       oldDockedStyle &&
-      !oldDockedStyle.textContent.includes("--g-page-header-height")
+      (!oldDockedStyle.textContent.includes("--g-page-header-height") ||
+        !oldDockedStyle.textContent.includes("--g-sidebar-tint"))
     ) {
       oldDockedStyle.remove();
     }
@@ -1249,6 +1398,7 @@ ${P} hui-view-container {
         "  z-index: 5;",
         "}",
         ".sidebar-shell {",
+        "  z-index: 30 !important;",
         "  inset: var(--g-edge-top) auto var(--g-dock-bottom) var(--g-edge-left) !important;",
         "  width: var(--ha-sidebar-width) !important;",
         "  height: auto !important;",
@@ -1461,13 +1611,16 @@ ${P} hui-view-container {
     });
   }
 
-  // 原生「编辑仪表盘」按钮被隐藏了，这里在 ⋮ 菜单里补一项
+  // 原生「编辑仪表盘」按钮被隐藏了时，可选择在 ⋮ 菜单里补一项（默认关闭：
+  // PC 端已经是胶囊里的独立铅笔图标，菜单里不需要重复）。
   function injectEditItem(toolbar) {
-    if (!CONFIG.addEditMenuItem) return;
     const dd = toolbar.querySelector(".action-items ha-dropdown");
     if (!dd) return;
-
     const ours = dd.querySelector("#glass-edit-item");
+    if (!CONFIG.addEditMenuItem) {
+      if (ours) ours.remove();
+      return;
+    }
     if (hasNativeEditItem(dd)) {
       if (ours) ours.remove();
       return;
@@ -1572,10 +1725,49 @@ ${P} hui-view-container {
     return el ? (el.textContent || "").trim() : "";
   }
 
+  function iconForPath(panel, path) {
+    const views =
+      (panel && panel.lovelace && panel.lovelace.config && panel.lovelace.config.views) || [];
+    const view = views.find((v) => v.path === path);
+    return (view && view.icon) || "";
+  }
+
+  // Match v1.1.1: make one accent-colored copy, then reveal only the part
+  // physically covered by the moving indicator. Native glyphs remain the base.
+  function ensureTint(tab, icon, text) {
+    let tint = tab.querySelector(":scope > .glass-tint");
+    if (!tint) {
+      tint = document.createElement("span");
+      tint.className = "glass-tint";
+      tint.setAttribute("aria-hidden", "true");
+      tab.appendChild(tint);
+    }
+    const key = `${icon}|${text}`;
+    if (tint.dataset.key === key) return;
+    tint.dataset.key = key;
+    tint.textContent = "";
+
+    if (icon) {
+      const ic = document.createElement("ha-icon");
+      ic.icon = icon;
+      tint.appendChild(ic);
+    }
+
+    if (CONFIG.tabLabel && text) {
+      const label = document.createElement("span");
+      label.className = "glass-tab-label";
+      label.textContent = text;
+      tint.appendChild(label);
+    }
+  }
+
   function injectTabLabels(toolbar, panel) {
     dockTabs(toolbar).forEach((tab) => {
       const path = tab.getAttribute("data-path");
       const text = labelForPath(panel, path) || nativeTabLabel(tab);
+      const icon = iconForPath(panel, path) || nativeTabIcon(tab);
+      // Remove the progress left by the newer in-place color-mix implementation.
+      tab.style.removeProperty("--g-icon-active-progress");
       if (CONFIG.tabLabel) {
         let label = tab.querySelector(":scope > .glass-tab-label");
         if (!label) {
@@ -1585,7 +1777,7 @@ ${P} hui-view-container {
         }
         if (label.textContent !== text) label.textContent = text;
       }
-      ensureTint(tab, iconForPath(panel, path) || nativeTabIcon(tab), text);
+      ensureTint(tab, icon, text);
     });
   }
 
@@ -1616,53 +1808,28 @@ ${P} hui-view-container {
     );
   }
 
-  // 底栏图标：优先用视图自己配置的 icon；没配就退回 HA 实际渲染的那个
-  function iconForPath(panel, path) {
-    const views =
-      (panel && panel.lovelace && panel.lovelace.config && panel.lovelace.config.views) || [];
-    const view = views.find((v) => v.path === path);
-    return (view && view.icon) || "";
-  }
-
-  // 盖在高亮块上的蓝色副本（内容与真实图标/文字完全一致，靠 clip 只露出一部分）
-  function ensureTint(tab, icon, text) {
-    let tint = tab.querySelector(":scope > .glass-tint");
-    if (!tint) {
-      tint = document.createElement("span");
-      tint.className = "glass-tint";
-      tint.setAttribute("aria-hidden", "true");
-      tab.appendChild(tint);
-    }
-    const key = `${icon}|${text}`;
-    if (tint.dataset.key === key) return;
-    tint.dataset.key = key;
-    tint.textContent = "";
-
-    // 视图没配 icon 时 HA 本来就不显示图标，这里也不补（否则会多出一个错的图标）
-    if (icon) {
-      const ic = document.createElement("ha-icon");
-      ic.icon = icon;
-      tint.appendChild(ic);
-    }
-
-    if (CONFIG.tabLabel && text) {
-      const lb = document.createElement("span");
-      lb.className = "glass-tab-label";
-      lb.textContent = text;
-      tint.appendChild(lb);
-    }
-  }
-
   // 选中块：插在 ha-tab-group 的 shadow 里（.tabs 是 position:relative），
   // 靠 transform 平滑滑到当前 tab 下面。tab 自身只改图标颜色。
   let indicator = null;
   let dragState = null;
   let snapUntil = 0;
   let hoverRaf = 0;
+  let pageTintUntil = 0;
+  let pageTintTimer = 0;
   let suppressSwipeClick = null;
+  let suppressDockClickUntil = 0;
   window.addEventListener(
     "click",
     (ev) => {
+      if (Date.now() < suppressDockClickUntil) {
+        const path = ev.composedPath ? ev.composedPath() : [ev.target];
+        if (path.some((node) => node && node.tagName === "HA-TAB-GROUP-TAB")) {
+          suppressDockClickUntil = 0;
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          return;
+        }
+      }
       const guard = suppressSwipeClick;
       if (!guard) return;
       if (Date.now() > guard.until) {
@@ -1692,21 +1859,1669 @@ ${P} hui-view-container {
     : `transform ${MOVE_MS}ms cubic-bezier(.32,.72,0,1), width .18s ease, height .18s ease`;
 
   // 按住 / 拖动时高亮块变大（高了 5px、左右各宽 10px），底色 / 透明度不变
+  // ==========================================================================
+  //  玻璃遮罩（完整版）：snapdom 抓 HA 的 shadow DOM 纹理 + WebGL 折射采样。
+  //  与测试页同一套 shader / 渲染器；差异只在 DOM 路径（HA 内容在 shadow DOM 里）。
+  //  Liquid glass shaders / edge refraction from Zqysl/liquid-glass-webgl (MIT).
+  // ==========================================================================
+  const GLASS_VERT = `
+attribute vec2 a_pos;
+varying vec2 v_uv;
+void main() {
+  v_uv = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}`;
+
+  const GLASS_BLUR_H = `
+precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_image;
+uniform vec2 u_canvasSize;
+uniform vec2 u_capsuleTopLeft;
+uniform vec2 u_imageOffset;
+uniform vec2 u_imageDrawSize;
+uniform vec2 u_directionPx;
+uniform int u_radius;
+#define MAX_RADIUS 64
+uniform float u_kernel[MAX_RADIUS];
+vec3 sampleImage(vec2 uv) { return texture2D(u_image, clamp(uv, 0.0, 1.0)).rgb; }
+void main() {
+  vec2 domUv = vec2(v_uv.x, 1.0 - v_uv.y);
+  vec2 localPx = domUv * u_canvasSize;
+  vec2 containerPx = u_capsuleTopLeft + localPx;
+  vec2 uv = (containerPx - u_imageOffset) / u_imageDrawSize;
+  vec2 dirUv = u_directionPx / u_imageDrawSize;
+  vec3 res = sampleImage(uv) * u_kernel[0];
+  vec2 l = uv - dirUv;
+  vec2 r = uv + dirUv;
+  for (int i = 1; i < MAX_RADIUS; i++) {
+    if (i < u_radius) {
+      float w = u_kernel[i];
+      res += sampleImage(l) * w;
+      res += sampleImage(r) * w;
+    }
+    l -= dirUv;
+    r += dirUv;
+  }
+  gl_FragColor = vec4(res, 1.0);
+}`;
+
+  const GLASS_BLUR_V = `
+precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_tex;
+uniform vec2 u_canvasSize;
+uniform vec2 u_directionPx;
+uniform int u_radius;
+#define MAX_RADIUS 64
+uniform float u_kernel[MAX_RADIUS];
+vec3 sampleTex(vec2 uv) { return texture2D(u_tex, clamp(uv, 0.0, 1.0)).rgb; }
+void main() {
+  vec2 uv = v_uv;
+  vec2 dirUv = u_directionPx / u_canvasSize;
+  vec3 res = sampleTex(uv) * u_kernel[0];
+  vec2 l = uv - dirUv;
+  vec2 r = uv + dirUv;
+  for (int i = 1; i < MAX_RADIUS; i++) {
+    if (i < u_radius) {
+      float w = u_kernel[i];
+      res += sampleTex(l) * w;
+      res += sampleTex(r) * w;
+    }
+    l -= dirUv;
+    r += dirUv;
+  }
+  gl_FragColor = vec4(res, 1.0);
+}`;
+
+  const GLASS_COMPOSE = `
+precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_blurTex;
+uniform sampler2D u_sharp;
+uniform vec2 u_imageOffset;
+uniform vec2 u_imageDrawSize;
+uniform sampler2D u_overlay;
+uniform sampler2D u_shell;
+uniform vec2 u_canvasSize;
+uniform vec2 u_capsuleTopLeft;
+uniform vec2 u_foregroundCapsuleTopLeft;
+uniform vec4 u_overlayRect;
+uniform vec4 u_shellRect;
+uniform vec2 u_shellScale;
+uniform vec3 u_tintColor;
+uniform vec3 u_rimTop;
+uniform vec3 u_rimBottom;
+uniform float u_rimAlpha;
+uniform float u_borderPx;
+uniform float u_edgeMapStartPx;
+uniform float u_edgeMapMaxPx;
+uniform vec2 u_capsuleCenterPx;
+uniform vec2 u_capsuleHalfPx;
+uniform vec2 u_capsuleScale;
+uniform vec2 u_baseHalfPx;
+uniform float u_baseRadiusPx;
+uniform float u_ssaa;
+float sdRoundBox(vec2 p, vec2 halfSize, float r) {
+  r = clamp(r, 0.0, min(halfSize.x, halfSize.y));
+  vec2 q = abs(p) - (halfSize - vec2(r));
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+// 形变后的胶囊 = 未形变胶囊按 (sx, sy) 缩放。
+// 把点变换回未形变空间求 SDF，再按缩放比换算回当前空间：
+// 任意水平距离按 sx 缩放、任意垂直距离按 sy 缩放（圆角因此变成椭圆角）。
+float lensDist(vec2 p) {
+  vec2 scale = max(u_capsuleScale, vec2(1e-3));
+  vec2 ps = p / scale;
+  float d = sdRoundBox(ps, u_baseHalfPx, u_baseRadiusPx);
+  return d * min(scale.x, scale.y);
+}
+vec2 lensNormal(vec2 p) {
+  float e = 0.5;
+  float dx = lensDist(p + vec2(e, 0.0)) - lensDist(p - vec2(e, 0.0));
+  float dy = lensDist(p + vec2(0.0, e)) - lensDist(p - vec2(0.0, e));
+  vec2 g = vec2(dx, dy);
+  float lg = length(g);
+  if (lg < 1e-4) return vec2(0.0, 1.0);
+  return g / lg;
+}
+float lensOppositeDistance(vec2 p, vec2 n) {
+  const int STEPS = 16;
+  const int REFINE = 6;
+  if (lensDist(p) >= 0.0) return 0.0;
+  float t = 1.0;
+  float lo = 0.0;
+  float hi = 0.0;
+  bool foundHi = false;
+  for (int i = 0; i < STEPS; i++) {
+    float d = lensDist(p - n * t);
+    if (!foundHi) {
+      if (d > 0.0) { hi = t; foundHi = true; }
+      else { lo = t; t += max(1.0, abs(d)); }
+    }
+  }
+  if (!foundHi) hi = max(lo + 1.0, length(u_capsuleHalfPx) * 4.0);
+  for (int j = 0; j < REFINE; j++) {
+    float mid = 0.5 * (lo + hi);
+    float d = lensDist(p - n * mid);
+    if (d < 0.0) lo = mid; else hi = mid;
+  }
+  return hi;
+}
+vec3 shade(vec2 localPx) {
+  vec2 p = localPx - u_capsuleCenterPx;
+  vec2 halfSize = u_capsuleHalfPx;
+  float sdf = lensDist(p);
+  float distIn = max(0.0, -sdf);
+  float startPx = max(0.001, u_edgeMapStartPx);
+  float u = clamp((startPx - distIn) / startPx, 0.0, 1.0);
+  float t = 1.0 - pow(1.0 - u, 0.3333333333);
+  float q = t * t;
+  vec2 n = lensNormal(p);
+  float maxDelta = lensOppositeDistance(p, n);
+  float cappedMaxDelta = (u_edgeMapMaxPx > 0.0) ? min(maxDelta, u_edgeMapMaxPx) : maxDelta;
+  float bendScalar = cappedMaxDelta * q;
+  vec2 bend = vec2(n.x * 0.5, n.y * 0.15) * bendScalar;
+  vec2 bgMappedP = p * vec2(1.0, 1.1) - bend;
+  vec2 bgLocalPx = bgMappedP + u_capsuleCenterPx;
+  vec2 bgDomUv = bgLocalPx / u_canvasSize;
+  vec2 bgGlUv = vec2(bgDomUv.x, 1.0 - bgDomUv.y);
+  vec3 bgBlurred = texture2D(u_blurTex, bgGlUv).rgb;
+  // 只有底栏胶囊范围内才用模糊（对应底栏自身的 backdrop 模糊）；
+  // 伸出底栏外的那部分页面保持清晰，边缘折射也因此对栏外内容有效。
+  // 注意：u_capsuleTopLeft 是“相对截图像素原点”的坐标，而 u_shellRect 是视口坐标，
+  // 比较底栏范围必须用视口原点（u_foregroundCapsuleTopLeft）。
+  vec2 bgContainerPx = u_capsuleTopLeft + bgLocalPx;
+  vec2 sharpUv = (bgContainerPx - u_imageOffset) / u_imageDrawSize;
+  vec3 bgSharp = texture2D(u_sharp, clamp(sharpUv, 0.0, 1.0)).rgb;
+  vec2 bgViewportPx = u_foregroundCapsuleTopLeft + bgLocalPx;
+  vec2 dockHalf = 0.5 * u_shellRect.zw;
+  float bgDockSdf = sdRoundBox(
+    bgViewportPx - (u_shellRect.xy + dockHalf),
+    dockHalf,
+    min(dockHalf.x, dockHalf.y)
+  );
+  vec3 color = mix(bgSharp, bgBlurred, 1.0 - smoothstep(-1.5, 1.5, bgDockSdf));
+  // Keep the dock capsule on its own texture so its lens magnification is
+  // independent from the page-background mapping above.
+  vec2 shellMappedP = p * u_shellScale - bend;
+  vec2 shellLocalPx = shellMappedP + u_capsuleCenterPx;
+  vec2 shellContainerPx = u_foregroundCapsuleTopLeft + shellLocalPx;
+  vec2 shellTexturePx = shellContainerPx - u_shellRect.xy;
+  if (
+    shellTexturePx.x >= 0.0 &&
+    shellTexturePx.y >= 0.0 &&
+    shellTexturePx.x <= u_shellRect.z &&
+    shellTexturePx.y <= u_shellRect.w
+  ) {
+    vec2 shellUv = shellTexturePx / u_shellRect.zw;
+    vec4 shell = texture2D(u_shell, shellUv);
+    color = mix(color, shell.rgb, shell.a);
+  }
+  // Sharp dock border. It is drawn analytically in the shell's own coordinate
+  // space, so it bends with the refraction but never gets resampled/blurred by
+  // the 1.1x shell texture magnification.
+  vec2 shellHalf = 0.5 * u_shellRect.zw;
+  vec2 dockRel = shellContainerPx - (u_shellRect.xy + shellHalf);
+  float dockSdf = sdRoundBox(dockRel, shellHalf, min(shellHalf.x, shellHalf.y));
+  float halfBorder = max(0.5, 0.5 * u_borderPx);
+  float borderMask =
+    1.0 - smoothstep(halfBorder - 0.75, halfBorder + 0.75, abs(dockSdf));
+  if (borderMask > 0.0) {
+    float rimT = clamp((dockRel.y + shellHalf.y) / max(1.0, 2.0 * shellHalf.y), 0.0, 1.0);
+    vec3 rimRgb = mix(u_rimTop, u_rimBottom, rimT);
+    color = mix(color, rimRgb, borderMask * u_rimAlpha);
+  }
+  // Match glass-ui-test: refract foreground glyphs only at the lens edge,
+  // without scaling their interior.
+  vec2 fgMappedP = p - bend;
+  vec2 fgLocalPx = fgMappedP + u_capsuleCenterPx;
+  vec2 containerPx = u_foregroundCapsuleTopLeft + fgLocalPx;
+  vec2 overlayLocalPx = containerPx - u_overlayRect.xy;
+  vec4 overlay = vec4(0.0);
+  if (
+    overlayLocalPx.x >= 0.0 &&
+    overlayLocalPx.y >= 0.0 &&
+    overlayLocalPx.x <= u_overlayRect.z &&
+    overlayLocalPx.y <= u_overlayRect.w
+  ) {
+    vec2 overlayUv = overlayLocalPx / u_overlayRect.zw;
+    overlay = texture2D(u_overlay, overlayUv);
+    // The live dock keeps v1.1.1's clipped accent copy. The glass snapshot
+    // excludes that copy and recolors the single native glyph sample here.
+    overlay.rgb = u_tintColor;
+  }
+  return mix(color, overlay.rgb, overlay.a);
+}
+vec4 shadeWithCoverage(vec2 localPx) {
+  vec2 p = localPx - u_capsuleCenterPx;
+  vec2 halfSize = u_capsuleHalfPx;
+  float sdf = lensDist(p);
+  float coverage = 1.0 - smoothstep(-1.0, 1.0, sdf);
+  // Accumulate premultiplied color so transparent edge pixels do not form a
+  // dark/bright fringe when the canvas is composited over the live page.
+  return vec4(shade(localPx) * coverage, coverage);
+}
+void main() {
+  vec2 domUv = vec2(v_uv.x, 1.0 - v_uv.y);
+  vec2 localPx = domUv * u_canvasSize;
+  vec4 sampleColor = shadeWithCoverage(localPx);
+  if (u_ssaa > 1.5) {
+    sampleColor = shadeWithCoverage(localPx + vec2(0.125, 0.375)) * 0.25;
+    sampleColor += shadeWithCoverage(localPx + vec2(0.375, -0.125)) * 0.25;
+    sampleColor += shadeWithCoverage(localPx + vec2(-0.125, -0.375)) * 0.25;
+    sampleColor += shadeWithCoverage(localPx + vec2(-0.375, 0.125)) * 0.25;
+  }
+  float alpha = sampleColor.a;
+  vec3 color = alpha > 0.0001 ? sampleColor.rgb / alpha : vec3(0.0);
+  gl_FragColor = vec4(color, alpha);
+}`;
+
+  function createGlassRenderer(canvas) {
+    const gl = canvas.getContext("webgl", {
+      alpha: true, premultipliedAlpha: false, antialias: true,
+      depth: false, stencil: false, preserveDrawingBuffer: true,
+    });
+    if (!gl) throw new Error("WebGL not supported");
+
+    function compile(type, source) {
+      const shader = gl.createShader(type);
+      if (!shader) throw new Error("createShader failed");
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        const log = gl.getShaderInfoLog(shader);
+        gl.deleteShader(shader);
+        throw new Error(log || "shader compile error");
+      }
+      return shader;
+    }
+    function program(vert, frag) {
+      const vs = compile(gl.VERTEX_SHADER, vert);
+      const fs = compile(gl.FRAGMENT_SHADER, frag);
+      const p = gl.createProgram();
+      if (!p) throw new Error("createProgram failed");
+      gl.attachShader(p, vs); gl.attachShader(p, fs);
+      gl.bindAttribLocation(p, 0, "a_pos");
+      gl.linkProgram(p);
+      gl.deleteShader(vs); gl.deleteShader(fs);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+        const log = gl.getProgramInfoLog(p);
+        gl.deleteProgram(p);
+        throw new Error(log || "program link error");
+      }
+      return p;
+    }
+
+    const KERNEL_MAX_RADIUS = 64;
+    function buildKernel(radiusPx) {
+      const r = Math.max(0, radiusPx);
+      const radius = Math.min(KERNEL_MAX_RADIUS, Math.max(1, Math.floor(r) + 1));
+      const sigma = Math.max(r * 0.5, 0.001);
+      const kernel = new Float32Array(KERNEL_MAX_RADIUS);
+      let sum = 0;
+      for (let i = 0; i < radius; i++) {
+        const w = Math.exp(-(i * i) / (2 * sigma * sigma));
+        kernel[i] = w;
+        sum += i === 0 ? w : 2 * w;
+      }
+      if (sum > 0) for (let i = 0; i < radius; i++) kernel[i] /= sum;
+      return { radius, kernel };
+    }
+
+    const blurH = program(GLASS_VERT, GLASS_BLUR_H);
+    const blurV = program(GLASS_VERT, GLASS_BLUR_V);
+    const compose = program(GLASS_VERT, GLASS_COMPOSE);
+
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1, 1, -1, -1, 1,
+      -1, 1, 1, -1, 1, 1,
+    ]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    function uniform(programObject, name) {
+      return gl.getUniformLocation(programObject, name);
+    }
+    const u = {
+      image: uniform(blurH, "u_image"),
+      hCanvas: uniform(blurH, "u_canvasSize"),
+      hTopLeft: uniform(blurH, "u_capsuleTopLeft"),
+      hImageOffset: uniform(blurH, "u_imageOffset"),
+      hImageSize: uniform(blurH, "u_imageDrawSize"),
+      hDir: uniform(blurH, "u_directionPx"),
+      hRadius: uniform(blurH, "u_radius"),
+      hKernel: uniform(blurH, "u_kernel[0]"),
+      vTex: uniform(blurV, "u_tex"),
+      vCanvas: uniform(blurV, "u_canvasSize"),
+      vDir: uniform(blurV, "u_directionPx"),
+      vRadius: uniform(blurV, "u_radius"),
+      vKernel: uniform(blurV, "u_kernel[0]"),
+      cBlur: uniform(compose, "u_blurTex"),
+      cShell: uniform(compose, "u_shell"),
+      cCanvas: uniform(compose, "u_canvasSize"),
+      cStart: uniform(compose, "u_edgeMapStartPx"),
+      cMax: uniform(compose, "u_edgeMapMaxPx"),
+      cSsaa: uniform(compose, "u_ssaa"),
+      cSharp: uniform(compose, "u_sharp"),
+      cImageOffset: uniform(compose, "u_imageOffset"),
+      cImageSize: uniform(compose, "u_imageDrawSize"),
+      cOverlay: uniform(compose, "u_overlay"),
+      cTopLeft: uniform(compose, "u_capsuleTopLeft"),
+      cForegroundTopLeft: uniform(compose, "u_foregroundCapsuleTopLeft"),
+      cOverlayRect: uniform(compose, "u_overlayRect"),
+      cShellRect: uniform(compose, "u_shellRect"),
+      cShellScale: uniform(compose, "u_shellScale"),
+      cTint: uniform(compose, "u_tintColor"),
+      cCapsuleCenter: uniform(compose, "u_capsuleCenterPx"),
+      cCapsuleHalf: uniform(compose, "u_capsuleHalfPx"),
+      cCapsuleScale: uniform(compose, "u_capsuleScale"),
+      cBaseHalf: uniform(compose, "u_baseHalfPx"),
+      cBaseRadius: uniform(compose, "u_baseRadiusPx"),
+      cRimTop: uniform(compose, "u_rimTop"),
+      cRimBottom: uniform(compose, "u_rimBottom"),
+      cRimAlpha: uniform(compose, "u_rimAlpha"),
+      cBorderPx: uniform(compose, "u_borderPx"),
+    };
+    function texture() {
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      return tex;
+    }
+
+    gl.activeTexture(gl.TEXTURE0);
+    const imageTex = texture();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+      new Uint8Array([0, 0, 0, 0]));
+
+    gl.activeTexture(gl.TEXTURE2);
+    const tempTex = texture();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    const tempFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, tempFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tempTex, 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    const blurTex = texture();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blurTex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    gl.useProgram(blurH); gl.uniform1i(u.image, 0);
+    gl.useProgram(blurV); gl.uniform1i(u.vTex, 2);
+    gl.activeTexture(gl.TEXTURE3);
+    const overlayTex = texture();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+      new Uint8Array([0, 0, 0, 0]));
+    gl.useProgram(compose);
+    gl.uniform1i(u.cBlur, 1);
+    gl.uniform1i(u.cOverlay, 3);
+    gl.activeTexture(gl.TEXTURE4);
+    const shellTex = texture();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+      new Uint8Array([0, 0, 0, 0]));
+    gl.useProgram(compose);
+    gl.uniform1i(u.cShell, 4);
+
+    let lastW = 0, lastH = 0, blurSizeW = 1, blurSizeH = 1, imageW = 0, imageH = 0;
+
+    function setImage(img) {
+      imageW = img.naturalWidth || img.width;
+      imageH = img.naturalHeight || img.height;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, imageTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    }
+    function setOverlay(source) {
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, overlayTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    }
+    function setShell(source) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, shellTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    }
+    function resize(wCss, hCss, dpr) {
+      const w = Math.max(1, Math.round(wCss * dpr));
+      const h = Math.max(1, Math.round(hCss * dpr));
+      if (w === lastW && h === lastH) return;
+      lastW = w; lastH = h;
+      canvas.width = w; canvas.height = h;
+      blurSizeW = w; blurSizeH = h;
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, tempTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, blurSizeW, blurSizeH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, blurTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, blurSizeW, blurSizeH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.viewport(0, 0, w, h);
+    }
+    function render(p) {
+      const dpr = p.dpr;
+      const blurRadiusPx = p.blurRadiusPx ?? 12;
+      let drawW = p.containerW, drawH = p.containerH, offsetX = 0, offsetY = 0;
+      if (imageW > 0 && imageH > 0 && p.containerW > 0 && p.containerH > 0) {
+        const scale = Math.max(p.containerW / imageW, p.containerH / imageH);
+        drawW = imageW * scale; drawH = imageH * scale;
+        offsetX = (p.containerW - drawW) * 0.5;
+        offsetY = (p.containerH - drawH) * 0.5;
+      }
+      const { radius: kernelRadius, kernel } = buildKernel(blurRadiusPx * dpr);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, tempFbo);
+      gl.viewport(0, 0, blurSizeW, blurSizeH);
+      gl.disable(gl.BLEND);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(blurH);
+      gl.uniform2f(u.hCanvas, canvas.width, canvas.height);
+      gl.uniform2f(u.hTopLeft, p.capsuleLeft * dpr, p.capsuleTop * dpr);
+      gl.uniform2f(u.hImageOffset, offsetX * dpr, offsetY * dpr);
+      gl.uniform2f(u.hImageSize, drawW * dpr, drawH * dpr);
+      gl.uniform2f(u.hDir, 1, 0);
+      gl.uniform1i(u.hRadius, kernelRadius);
+      gl.uniform1fv(u.hKernel, kernel);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.viewport(0, 0, blurSizeW, blurSizeH);
+      gl.disable(gl.BLEND);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(blurV);
+      gl.uniform2f(u.vCanvas, canvas.width, canvas.height);
+      gl.uniform2f(u.vDir, 0, 1);
+      gl.uniform1i(u.vRadius, kernelRadius);
+      gl.uniform1fv(u.vKernel, kernel);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.disable(gl.BLEND);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(compose);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, imageTex);
+      gl.uniform1i(u.cSharp, 0);
+      gl.uniform2f(u.cImageOffset, offsetX * dpr, offsetY * dpr);
+      gl.uniform2f(u.cImageSize, drawW * dpr, drawH * dpr);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, overlayTex);
+      gl.uniform1i(u.cOverlay, 3);
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, shellTex);
+      gl.uniform1i(u.cShell, 4);
+      gl.uniform2f(u.cTopLeft, p.capsuleLeft * dpr, p.capsuleTop * dpr);
+      gl.uniform2f(
+        u.cCapsuleCenter,
+        p.capsuleCenterX * dpr,
+        p.capsuleCenterY * dpr
+      );
+      gl.uniform2f(u.cCapsuleHalf, p.capsuleHalfW * dpr, p.capsuleHalfH * dpr);
+      gl.uniform2f(u.cCapsuleScale, p.capsuleScaleX, p.capsuleScaleY);
+      gl.uniform2f(u.cBaseHalf, p.baseHalfW * dpr, p.baseHalfH * dpr);
+      gl.uniform1f(u.cBaseRadius, p.baseRadius * dpr);
+      gl.uniform2f(
+        u.cForegroundTopLeft,
+        p.foregroundCapsuleLeft * dpr,
+        p.foregroundCapsuleTop * dpr
+      );
+      gl.uniform4f(
+        u.cOverlayRect,
+        p.overlayLeft * dpr,
+        p.overlayTop * dpr,
+        p.overlayWidth * dpr,
+        p.overlayHeight * dpr
+      );
+      gl.uniform4f(
+        u.cShellRect,
+        p.shellLeft * dpr,
+        p.shellTop * dpr,
+        p.shellWidth * dpr,
+        p.shellHeight * dpr
+      );
+      gl.uniform2f(u.cShellScale, p.shellScaleX, p.shellScaleY);
+      gl.uniform3f(u.cTint, p.tintR, p.tintG, p.tintB);
+      gl.uniform3f(u.cRimTop, p.rimTopR, p.rimTopG, p.rimTopB);
+      gl.uniform3f(u.cRimBottom, p.rimBottomR, p.rimBottomG, p.rimBottomB);
+      gl.uniform1f(u.cRimAlpha, p.rimAlpha);
+      gl.uniform1f(u.cBorderPx, p.borderPx * dpr);
+      gl.uniform2f(u.cCanvas, canvas.width, canvas.height);
+      gl.uniform1f(u.cStart, p.edgeMapStartPx * dpr);
+      gl.uniform1f(u.cMax, p.edgeMapMaxPx * dpr);
+      gl.uniform1f(u.cSsaa, p.ssaa || 1);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+    return { setImage, setOverlay, setShell, resize, render };
+  }
+  // snapdom 3.8.x supports open shadow roots and is loaded from beside glass-ui.js.
+  let snapdomPromise = null;
+  function loadSnapdom() {
+    if (window.snapdom) return Promise.resolve(window.snapdom);
+    if (snapdomPromise) return snapdomPromise;
+    snapdomPromise = new Promise((resolve, reject) => {
+      const ownScript = Array.from(document.scripts).find((s) => /glass-ui\.js(?:\?|$)/.test(s.src));
+      const src = ownScript
+        ? new URL("snapdom.min.js", ownScript.src).href
+        : "/local/glass-ui/snapdom.min.js";
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = () => window.snapdom
+        ? resolve(window.snapdom)
+        : reject(new Error("snapdom did not initialize"));
+      script.onerror = () => {
+        snapdomPromise = null;
+        reject(new Error("failed to load snapdom"));
+      };
+      document.head.appendChild(script);
+    });
+    return snapdomPromise;
+  }
+
+  let glassCover = null;
+  let glassShadow = null;
+  let glassRenderer = null;
+  let glassTexture = null;
+  let glassActive = false;
+  let glassBusy = false;
+  let glassOverlayBusy = false;
+  let glassOverlayPending = false;
+  let glassOverlayTimer = 0;
+  let glassOverlayRefreshTimer = 0;
+  let glassDirty = true;
+  let glassWarmupTimer = 0;
+  let glassCaptureTimer = 0;
+  let glassCaptureRevision = 0;
+  let glassForceCapture = false;
+  let glassScrollCaptureTimer = 0;
+  let glassLastScrollCaptureAt = 0;
+  let glassRetryTimer = 0;
+  let glassRetryUntil = 0;
+  let glassViewSettleTimer = 0;
+  let glassObservedView = null;
+  let glassViewCaptureTimer = 0;
+  let glassLastCaptureAt = 0;
+  let glassLastSwitchAt = 0;
+  let glassViewMutations = [];
+  let glassViewResize = null;
+  let glassViewSeen = new WeakSet();
+  let glassViewObservedCount = 0;
+  const GLASS_VIEW_QUIET_MS = 260;
+  const GLASS_VIEW_MAX_NODES = 4000;
+  // 拖动时按横向加速度做挤压 / 拉伸（预设参数，后续可调）
+  const GLASS_DRAG_SQUASH = {
+    enabled: true,
+    maxX: 0.15, // 满量程：长度 ±15%
+    maxY: 0.20, // 满量程：高度 ∓20%
+    accelFull: 1200, // 达到满量程的加速度，px/s²
+    accelDead: 400, // 死区，小于该加速度不变形
+    velSmoothMs: 85, // 速度平滑时间常数
+    accelSmoothMs: 80, // 加速度平滑时间常数（越大越迟钝，越小越能抓到瞬时减速）
+    velMin: 50, // 速度低于该值不刷新方向，px/s
+    velGate: 150, // 参考速度低于该值不触发形变，px/s
+    velGateFull: 350, // 参考速度高于该值才完全生效，px/s
+    stopMs: 150, // 手指停住时速度衰减的时间常数（越大减速过程越长）
+    refMs: 480, // 参考速度的衰减时间常数（保证停下后仍能维持形变判定）
+    outputSmooth: 0.11, // 输出插值系数（越小越慢越顺）
+    flipBoost: 1.8, // 形变方向翻转时的加速系数（让“变高/变扁”能及时出现）
+    returnMs: 200, // 松手回弹时长（几何直出后仅作参考）
+  };
+  let lensSquash = 0;
+  let lensSquashVX = 0;
+  let lensSquashAX = 0;
+  let lensSquashDir = 1;
+  let lensSquashLastX = null;
+  let lensSquashLastT = 0;
+  let lensSquashLastTick = 0;
+  let lensSquashPrevVX = 0;
+  let lensSquashSpeedRef = 0;
+  let lensSquashRaf = 0;
+  let lensDirBaseLeft = null;
+  let lensDirBaseRight = null;
+  let lensDirCenter = null;
+  let lensDirPrev = 0;
+  let lensLastLeft = 0;
+  let lensLastRight = 0;
+  let glassScale = 1;
+  let glassRootRect = null;
+  let glassTextureKey = "";
+  let glassLastOverlay = null;
+  let glassOverlayRect = null;
+  let glassOverlaySourceEl = null;
+  let glassOverlaySignature = "";
+  let glassDockShellRect = null;
+  let glassShellCanvas = null;
+  const GLASS_DOCK_SCALE_X = 1.1;
+  const GLASS_DOCK_SCALE_Y = 1.1;
+
+  function glassRenderScale() {
+    return Math.min(3, Math.max(1, glassScale, window.devicePixelRatio || 1));
+  }
+
+  function roundRectPath(ctx, x, y, w, h, radius) {
+    const r = Math.max(0, Math.min(radius, w / 2, h / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function rectChanged(a, b, epsilon = 0.75) {
+    return !a || !b ||
+      Math.abs(a.left - b.left) > epsilon ||
+      Math.abs(a.top - b.top) > epsilon ||
+      Math.abs(a.width - b.width) > epsilon ||
+      Math.abs(a.height - b.height) > epsilon;
+  }
+
+  function rectLayoutChanged(a, b, epsilon = 0.75) {
+    // Ignore scroll-content height: HA cards can extend/reflow vertically while
+    // the viewport and dock coordinates stay fixed.
+    return !a || !b ||
+      Math.abs(a.left - b.left) > epsilon ||
+      Math.abs(a.top - b.top) > epsilon ||
+      Math.abs(a.width - b.width) > epsilon;
+  }
+
+  // Build only the dock's surface/rim here. Never snapshot backdrop pixels into
+  // this layer: all content beneath it must come from the blurred page texture.
+  function buildDockShellLayer(tgRect, scale, radius, light) {
+    if (!tgRect.width || !tgRect.height) return null;
+    const shellScaleX = scale;
+    const shellW = Math.max(1, Math.round(tgRect.width * scale));
+    const shellH = Math.max(1, Math.round(tgRect.height * scale));
+    const shell = document.createElement("canvas");
+    shell.width = shellW;
+    shell.height = shellH;
+    const sctx = shell.getContext("2d");
+    const r = radius * scale;
+    sctx.save();
+    roundRectPath(sctx, 0, 0, shellW, shellH, r);
+    sctx.clip();
+    const surface = sctx.createLinearGradient(0, 0, 0, shellH);
+    if (light) {
+      surface.addColorStop(0, "rgba(245,245,245,.50)");
+      surface.addColorStop(0.45, "rgba(243,244,245,.50)");
+      surface.addColorStop(1, "rgba(240,241,244,.50)");
+    } else {
+      surface.addColorStop(0, "rgba(69,69,69,.50)");
+      surface.addColorStop(0.5, "rgba(69,69,69,.50)");
+      surface.addColorStop(1, "rgba(69,69,69,.50)");
+    }
+    sctx.fillStyle = surface;
+    sctx.fillRect(0, 0, shellW, shellH);
+    sctx.restore();
+
+    // 边框不画进这张纹理：纹理会被 1.1 倍放大并做双线性采样，0.5px 线会被糊开。
+    // 遮罩里的边框改由 shader 用 SDF 直接描边（只跟随折射位移，保持锐利）。
+    return {
+      canvas: shell,
+      rect: {
+        // The dock is fixed to the viewport; keep shell coordinates in viewport
+        // space so page scrolling cannot detach it from the glass lens.
+        left: tgRect.left,
+        top: tgRect.top,
+        width: tgRect.width,
+        height: tgRect.height,
+      },
+    };
+  }
+
+  function ensureGlassRenderer() {
+    if (glassRenderer) return true;
+    const canvas = document.createElement("canvas");
+    canvas.className = "glass-lens-cover";
+    canvas.setAttribute("aria-hidden", "true");
+    canvas.style.cssText = [
+      "position:fixed", "left:-10000px", "top:-10000px",
+      "width:1px", "height:1px", "opacity:0",
+      "border-radius:0px", "pointer-events:none",
+      "z-index:2147483000", `transition:opacity ${GROW_MS}ms cubic-bezier(.32,.72,0,1)`,
+    ].join(";");
+    document.body.appendChild(canvas);
+    glassCover = canvas;
+    // 遮罩用不透明画布盖住底栏，底栏自身的 --g-dock-outer 阴影会被盖掉；
+    // 这里补一层跟随胶囊形状的投影，让遮罩看起来浮在底栏之上。
+    const shadow = document.createElement("div");
+    shadow.className = "glass-lens-shadow";
+    shadow.setAttribute("aria-hidden", "true");
+    shadow.style.cssText = [
+      "position:fixed", "left:-10000px", "top:-10000px",
+      "width:1px", "height:1px", "opacity:0",
+      "border-radius:999px", "pointer-events:none",
+      "z-index:2147482999",
+      `transition:opacity ${GROW_MS}ms cubic-bezier(.32,.72,0,1)`,
+    ].join(";");
+    document.body.appendChild(shadow);
+    glassShadow = shadow;
+    try {
+      glassRenderer = createGlassRenderer(canvas);
+      return true;
+    } catch (err) {
+      console.warn("[glass-ui] WebGL glass unavailable; keeping accent highlight", err);
+      canvas.remove();
+      shadow.remove();
+      glassCover = null;
+      glassShadow = null;
+      return false;
+    }
+  }
+
+  function getGlassParts() {
+    const root = parts().root;
+    const sr = root && root.shadowRoot;
+    const tg = sr && sr.querySelector("ha-tab-group");
+    const vc = sr && sr.querySelector("hui-view-container");
+    const tabsEl = tg && tg.shadowRoot && tg.shadowRoot.querySelector(".tabs");
+    return { root, tg, vc, tabsEl };
+  }
+
+  function getGlassKey(root, vc) {
+    const viewport = root.getBoundingClientRect();
+    return [
+      location.pathname,
+      Math.round(viewport.width),
+      Math.round(viewport.height),
+      root.hasAttribute("glass-light") ? "light" : "dark",
+    ].join("|");
+  }
+
+  // Snapshot the actual HA view without the dock. Compose the blurred dock plate
+  // and an independently sampled tab foreground, exactly like the test page.
+  async function captureGlassBackground() {
+    if (glassBusy || !ensureGlassRenderer()) return;
+    const captureRevision = glassCaptureRevision;
+    const { root, tg, vc, tabsEl } = getGlassParts();
+    if (!root || !tg || !vc || !tabsEl) {
+      // 底栏/视图还没准备好：排一次重试，否则遮罩会一直停在“只有高亮块”的状态。
+      ensureGlassReady();
+      return;
+    }
+    glassBusy = true;
+    try {
+      const snap = await loadSnapdom();
+      const rootRect = vc.getBoundingClientRect();
+      const tgRect = tg.getBoundingClientRect();
+      const key = getGlassKey(root, vc);
+      if (!glassDirty && glassTexture && key === glassTextureKey) {
+        await captureGlassOverlay(snap, { root, tg, tabsEl, rootRect });
+        if (captureRevision !== glassCaptureRevision) {
+          glassDirty = true;
+          glassForceCapture = true;
+          return;
+        }
+        glassForceCapture = false;
+        return;
+      }
+      const light = root.hasAttribute("glass-light");
+      const captured = await snap.toCanvas(vc, { scale: 1 });
+      if (captureRevision !== glassCaptureRevision) {
+        glassDirty = true;
+        glassForceCapture = true;
+        return;
+      }
+      const current = getGlassParts();
+      if (
+        !vc.isConnected ||
+        !tg.isConnected ||
+        current.root !== root ||
+        current.vc !== vc ||
+        current.tg !== tg ||
+        rectLayoutChanged(rootRect, vc.getBoundingClientRect()) ||
+        rectChanged(tgRect, tg.getBoundingClientRect(), 2) ||
+        getGlassKey(root, vc) !== key
+      ) {
+        // HA is still replacing/resizing the view. Discard this mixed-frame
+        // snapshot; retry after the navigation settles instead of shifting icons.
+        glassDirty = true;
+        return;
+      }
+
+      // Normalize the snapshot itself to the capped sampling scale. Keeping the
+      // original DPR-3 bitmap while clamping glassScale to 2 misplaces the dock
+      // shell and foreground by one third on Android devices with DPR 3+.
+      glassScale = Math.min(2, Math.max(1, captured.width / Math.max(1, rootRect.width)));
+      const tex = document.createElement("canvas");
+      tex.width = Math.max(1, Math.round(rootRect.width * glassScale));
+      tex.height = Math.max(1, Math.round(rootRect.height * glassScale));
+      const ctx = tex.getContext("2d");
+      ctx.fillStyle = light ? "#eef0f4" : "#101114";
+      ctx.fillRect(0, 0, tex.width, tex.height);
+      ctx.drawImage(captured, 0, 0, captured.width, captured.height, 0, 0, tex.width, tex.height);
+
+      const dr = tgRect;
+      const rx = (dr.left - rootRect.left) * glassScale;
+      const ry = (dr.top - rootRect.top) * glassScale;
+      const rw = dr.width * glassScale;
+      const rh = dr.height * glassScale;
+      const radius = (parseFloat(getComputedStyle(root).getPropertyValue("--g-dock-radius")) || 30) * glassScale;
+
+      // The browser's backdrop-filter isn't included in a DOM snapshot. Recreate
+      // it clipped to the capsule, then composite HA's real translucent dock shell.
+      if (rw > 0 && rh > 0) {
+        const pad = 16 * glassScale;
+        // Mirror the unmasked dock's filter directly. Canvas uses backing-store
+        // pixels, so scale only its blur radius from CSS px to texture px.
+        const dockFilter =
+          getComputedStyle(root).getPropertyValue("--g-dock-filter").trim() ||
+          "blur(5px) saturate(180%) brightness(1.10)";
+        const textureDockFilter = dockFilter.replace(
+          /blur\(\s*([\d.]+)px\s*\)/i,
+          (_match, cssPx) => `blur(${Number(cssPx) * glassScale}px)`
+        );
+        const sx = Math.max(0, Math.floor(rx - pad));
+        const sy = Math.max(0, Math.floor(ry - pad));
+        const sw = Math.min(tex.width - sx, Math.ceil(rw + pad * 2));
+        const sh = Math.min(tex.height - sy, Math.ceil(rh + pad * 2));
+        if (sw > 0 && sh > 0) {
+          const source = document.createElement("canvas");
+          source.width = sw;
+          source.height = sh;
+          source.getContext("2d").drawImage(tex, sx, sy, sw, sh, 0, 0, sw, sh);
+          ctx.save();
+          roundRectPath(ctx, rx, ry, rw, rh, radius);
+          ctx.clip();
+          ctx.filter = textureDockFilter;
+          ctx.drawImage(source, sx, sy);
+          ctx.restore();
+        }
+      }
+
+      const previousTexture = glassTexture;
+      const previousTextureKey = glassTextureKey;
+      const previousRootRect = glassRootRect;
+      const previousScale = glassScale;
+      const previousDockShellRect = glassDockShellRect;
+      glassTexture = tex;
+      glassTextureKey = key;
+      glassDirty = false;
+      let foreground = await captureGlassOverlay(snap, { root, tg, tabsEl, rootRect, tex });
+      // If a throttled drag capture is already in flight, reuse the last stable
+      // foreground mask to finish this scene. Its pending refresh will replace it.
+      if (!foreground && glassLastOverlay) {
+        foreground = glassLastOverlay;
+        glassRenderer.setOverlay(foreground);
+      }
+      if (!foreground) {
+        // Don't mark a background-only/partial snapshot as ready; keep the last
+        // complete scene and retry so the dock shell is never missing in the lens.
+        glassTexture = previousTexture;
+        glassTextureKey = previousTextureKey;
+        glassRootRect = previousRootRect;
+        glassScale = previousScale;
+        glassDockShellRect = previousDockShellRect;
+        glassDirty = true;
+        glassForceCapture = true;
+        return;
+      }
+      if (captureRevision !== glassCaptureRevision) {
+        glassTexture = previousTexture;
+        glassTextureKey = previousTextureKey;
+        glassRootRect = previousRootRect;
+        glassScale = previousScale;
+        glassDockShellRect = previousDockShellRect;
+        glassDirty = true;
+        glassForceCapture = true;
+        return;
+      }
+      const shellLayer = buildDockShellLayer(tgRect, glassScale, radius, light);
+      if (!shellLayer) {
+        glassTexture = previousTexture;
+        glassTextureKey = previousTextureKey;
+        glassRootRect = previousRootRect;
+        glassScale = previousScale;
+        glassDockShellRect = previousDockShellRect;
+        glassDirty = true;
+        glassForceCapture = true;
+        return;
+      }
+      glassRenderer.setImage(tex);
+      glassRenderer.setShell(shellLayer.canvas);
+      glassShellCanvas = shellLayer.canvas;
+      // Keep the sampling origin paired with the texture actually bound to GL.
+      glassRootRect = rootRect;
+      glassDockShellRect = shellLayer.rect;
+      glassDirty = false;
+      glassForceCapture = false;
+      glassLastCaptureAt = performance.now();
+      if (glassActive) revealGlassCover();
+    } catch (err) {
+      console.warn("[glass-ui] texture capture failed; keeping accent highlight", err);
+    } finally {
+      glassBusy = false;
+      if ((glassActive || glassForceCapture) && glassDirty) {
+        clearTimeout(glassCaptureTimer);
+        glassCaptureTimer = setTimeout(captureGlassBackground, 100);
+      }
+    }
+  }
+
+  async function captureGlassOverlay(knownSnap, supplied) {
+    if (!glassRenderer) return;
+    if (glassOverlayBusy) {
+      glassOverlayPending = true;
+      // Reuse the last stable glyph mask for this scene capture; the in-flight
+      // snapshot will replace it as soon as it completes.
+      return glassLastOverlay;
+    }
+    glassOverlayBusy = true;
+    try {
+      const snap = knownSnap || await loadSnapdom();
+      const info = supplied || getGlassParts();
+      const { root, tg, vc, tabsEl } = info;
+      const rootRect = info.rootRect || (vc && vc.getBoundingClientRect()) || root.getBoundingClientRect();
+      if (!tg || !tabsEl || !glassTexture) return;
+      const baseTexture = glassTexture;
+      const baseKey = glassTextureKey;
+      const tabsRect = tabsEl.getBoundingClientRect();
+      if (vc && getGlassKey(root, vc) !== baseKey) {
+        if (!glassDirty) scheduleGlassCapture(120);
+        return;
+      }
+      const targetScale = glassRenderScale();
+      const tabSignature = dockTabs(tg)
+        .map((tab) => [
+          tab.getAttribute("data-path") || "",
+          nativeTabIcon(tab),
+          tab.querySelector(":scope > .glass-tab-label")?.textContent || "",
+        ].join(":"))
+        .join("|");
+      const signature = [
+        tabsRect.left,
+        tabsRect.top,
+        tabsRect.width,
+        tabsRect.height,
+        targetScale,
+        root.hasAttribute("glass-light") ? "light" : "dark",
+        tabSignature,
+      ].join("|");
+      if (
+        glassLastOverlay &&
+        glassOverlaySourceEl === tabsEl &&
+        glassOverlaySignature === signature
+      ) {
+        glassOverlayRect = {
+          left: tabsRect.left,
+          top: tabsRect.top,
+          width: tabsRect.width,
+          height: tabsRect.height,
+        };
+        return glassLastOverlay;
+      }
+      const deviceScale = Math.max(1, window.devicePixelRatio || 1);
+      let captureScale = Math.max(1, targetScale / deviceScale);
+      const snapshotOptions = {
+        scale: captureScale,
+        exclude: [".glass-tint", ".glass-indicator"],
+        excludeMode: "remove",
+      };
+      let foreground = await snap.toCanvas(tabsEl, snapshotOptions);
+      // snapdom/browser combinations differ on whether `scale: 1` already
+      // includes DPR. Measure the actual output and only recapture if it is
+      // below the lens backing resolution.
+      const actualScale = foreground.width / Math.max(1, tabsRect.width);
+      if (actualScale < targetScale * 0.95) {
+        captureScale = Math.min(
+          4,
+          captureScale * (targetScale / Math.max(0.5, actualScale))
+        );
+        snapshotOptions.scale = captureScale;
+        foreground = await snap.toCanvas(tabsEl, snapshotOptions);
+      }
+      const current = getGlassParts();
+      if (
+        !tabsEl.isConnected ||
+        current.root !== root ||
+        current.tg !== tg ||
+        current.tabsEl !== tabsEl ||
+        glassTexture !== baseTexture ||
+        glassTextureKey !== baseKey
+      ) {
+        if (glassActive) scheduleGlassCapture(80);
+        return;
+      }
+      // Keep the dock foreground as its own high-resolution texture instead of
+      // downsampling it into the page background (1× on mobile).
+      glassRenderer.setOverlay(foreground);
+      glassLastOverlay = foreground;
+      glassOverlaySourceEl = tabsEl;
+      glassOverlaySignature = signature;
+      glassOverlayRect = {
+        // Foreground/dock pixels are viewport-fixed, independent of the
+        // scrolling coordinate space used by the page-background texture.
+        left: tabsRect.left,
+        top: tabsRect.top,
+        width: tabsRect.width,
+        height: tabsRect.height,
+      };
+      return foreground;
+    } catch (err) {
+      console.warn("[glass-ui] foreground capture failed", err);
+    } finally {
+      glassOverlayBusy = false;
+      if (glassOverlayPending) {
+        glassOverlayPending = false;
+        clearTimeout(glassOverlayTimer);
+        glassOverlayTimer = setTimeout(captureGlassOverlay, 80);
+      }
+    }
+  }
+
+  function scheduleGlassOverlayRefresh() {
+    if (!glassActive || glassOverlayRefreshTimer) return;
+    glassOverlayRefreshTimer = setTimeout(() => {
+      glassOverlayRefreshTimer = 0;
+      if (glassActive) captureGlassOverlay();
+    }, 100);
+  }
+
+  function scheduleGlassCapture(delay = 100, force = false) {
+    glassDirty = true;
+    glassCaptureRevision++;
+    if (force) glassForceCapture = true;
+    clearTimeout(glassCaptureTimer);
+    glassCaptureTimer = setTimeout(() => {
+      // 拖动遮罩本身不会改变页面内容，拖动期间不抓背景；
+      // 标记为脏，松手后再补一张。
+      if (dragState) {
+        glassDirty = true;
+        glassForceCapture = true;
+        return;
+      }
+      if (glassActive || glassForceCapture) captureGlassBackground();
+    }, delay);
+  }
+
+  // 页面内容变化（数据刷新、卡片重排、图片/字体加载）后，等画面稳定再拍。
+  // HA 的卡片都在 shadow DOM 里，普通 MutationObserver 看不到，所以要深入 shadow
+  // root 监听；尺寸变化用 ResizeObserver 兜住图片 / 布局变化。
+  function glassViewChanged() {
+    if (dragState || document.visibilityState === "hidden") return;
+    clearTimeout(glassViewCaptureTimer);
+    glassViewCaptureTimer = setTimeout(() => {
+      glassViewCaptureTimer = 0;
+      if (dragState) return;
+      // 切页自带的 80ms / 450ms 两张已经覆盖渲染过程，这段时间内不再额外补拍。
+      if (performance.now() - glassLastSwitchAt < 1100) return;
+      // 刚拍过就顺延，避免切页那两张之外再多拍一张几乎相同的图。
+      const since = performance.now() - glassLastCaptureAt;
+      if (since < 500) {
+        glassViewCaptureTimer = setTimeout(() => {
+          glassViewCaptureTimer = 0;
+          if (!dragState) scheduleGlassCapture(0, true);
+        }, 500 - since);
+        return;
+      }
+      scheduleGlassCapture(0, true);
+    }, GLASS_VIEW_QUIET_MS);
+  }
+
+  function scanGlassView(node) {
+    if (!node || node.nodeType !== 1 || glassViewSeen.has(node)) return;
+    if (glassViewObservedCount > GLASS_VIEW_MAX_NODES) return;
+    glassViewSeen.add(node);
+    glassViewObservedCount++;
+    if (glassViewResize) glassViewResize.observe(node);
+    const sr = node.shadowRoot;
+    if (sr && !glassViewSeen.has(sr)) {
+      glassViewSeen.add(sr);
+      const mo = new MutationObserver((records) => {
+        for (const record of records) {
+          record.addedNodes.forEach(scanGlassView);
+        }
+        glassViewChanged();
+      });
+      mo.observe(sr, { childList: true, subtree: true, characterData: true });
+      glassViewMutations.push(mo);
+    }
+    for (let child = node.firstElementChild; child; child = child.nextElementSibling) {
+      scanGlassView(child);
+    }
+  }
+
+  function teardownGlassViewObserver() {
+    glassViewMutations.forEach((mo) => mo.disconnect());
+    glassViewMutations = [];
+    if (glassViewResize) glassViewResize.disconnect();
+    glassViewResize = null;
+    glassViewSeen = new WeakSet();
+    glassViewObservedCount = 0;
+    glassObservedView = null;
+  }
+
+  function observeGlassView(vc) {
+    if (!vc || vc === glassObservedView) return;
+    teardownGlassViewObserver();
+    glassObservedView = vc;
+    glassViewResize = new ResizeObserver(() => glassViewChanged());
+    const rootMo = new MutationObserver((records) => {
+      for (const record of records) {
+        record.addedNodes.forEach(scanGlassView);
+      }
+      glassViewChanged();
+    });
+    rootMo.observe(vc, { childList: true, subtree: true, characterData: true });
+    glassViewMutations.push(rootMo);
+    scanGlassView(vc);
+    // 字体加载完成会改变文字排版，补拍一次。
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => glassViewChanged()).catch(() => {});
+    }
+  }
+
+  // ---- 拖动挤压 / 拉伸 ------------------------------------------------------
+  // 形变只改胶囊的“几何”，不改画布内容的缩放：画布固定成带余量的外框，
+  // 着色器按真实坐标采样页面，所以背景不会被拉伸，只是露出更大/更小的范围。
+  function lensSquashFactors() {
+    const enabled = GLASS_DRAG_SQUASH.enabled;
+    const maxX = enabled ? GLASS_DRAG_SQUASH.maxX : 0;
+    const maxY = enabled ? GLASS_DRAG_SQUASH.maxY : 0;
+    const s = Math.max(-1, Math.min(1, lensSquash));
+    // s>0：沿运动方向加速 → 拉长 + 压扁；s<0：减速 → 缩短 + 变高
+    return { s, sx: 1 + s * maxX, sy: 1 - s * maxY, maxX, maxY };
+  }
+
+  function resetLensSquash() {
+    lensSquash = 0;
+    lensSquashVX = 0;
+    lensSquashAX = 0;
+    lensSquashLastX = null;
+    lensSquashLastT = 0;
+    if (glassActive) renderGlassCover();
+  }
+
+  function updateLensSquash(x, t) {
+    if (!GLASS_DRAG_SQUASH.enabled) return;
+    const cfg = GLASS_DRAG_SQUASH;
+    if (lensSquashLastX === null) {
+      lensSquashLastX = x;
+      lensSquashLastT = t;
+      return;
+    }
+    const dt = Math.max(4, Math.min(64, t - lensSquashLastT));
+    const vx = ((x - lensSquashLastX) / dt) * 1000;
+    lensSquashLastX = x;
+    lensSquashLastT = t;
+    // 只注入速度；加速度在 rAF 里算，这样“手指停住”也会产生减速。
+    lensSquashVX += (vx - lensSquashVX) * (1 - Math.exp(-dt / cfg.velSmoothMs));
+  }
+
+  function applyLensSquashDynamics(dt) {
+    const cfg = GLASS_DRAG_SQUASH;
+    const speed = Math.abs(lensSquashVX);
+    if (speed > cfg.velMin) lensSquashDir = lensSquashVX >= 0 ? 1 : -1;
+
+    // 速度变化的参考值（衰减得慢）：用于“钝化”门槛，避免停止瞬间被关掉形变
+    lensSquashSpeedRef = Math.max(
+      speed,
+      lensSquashSpeedRef * Math.exp(-dt / cfg.refMs)
+    );
+
+    const dv = lensSquashVX - lensSquashPrevVX;
+    lensSquashPrevVX = lensSquashVX;
+    const ax = (dv / dt) * 1000;
+    lensSquashAX += (ax - lensSquashAX) * (1 - Math.exp(-dt / cfg.accelSmoothMs));
+
+    const along = lensSquashAX * lensSquashDir;
+    const dead = cfg.accelDead;
+    const full = Math.max(dead + 1, cfg.accelFull);
+    const mag = Math.abs(along);
+    const norm = mag <= dead ? 0 : Math.min(1, (mag - dead) / (full - dead));
+
+    const gateLo = cfg.velGate;
+    const gateHi = Math.max(gateLo + 1, cfg.velGateFull);
+    let gate =
+      lensSquashSpeedRef <= gateLo
+        ? 0
+        : Math.min(1, (lensSquashSpeedRef - gateLo) / (gateHi - gateLo));
+    gate = gate * gate * (3 - 2 * gate);
+
+    const target = (along >= 0 ? 1 : -1) * norm * gate;
+    // 方向翻转（拉伸 ↔ 压缩）时给一点额外速率，避免从 +1 慢慢穿过 0 而错过减速窗口
+    const flipping = target !== 0 && lensSquash !== 0 && Math.sign(target) !== Math.sign(lensSquash);
+    const rate = Math.min(1, cfg.outputSmooth * (flipping ? cfg.flipBoost : 1));
+    lensSquash += (target - lensSquash) * rate;
+    if (Math.abs(lensSquash) < 0.002) lensSquash = 0;
+  }
+
+  function lensSquashTick(now) {
+    if (!dragState) {
+      lensSquashRaf = 0;
+      return;
+    }
+    const cfg = GLASS_DRAG_SQUASH;
+    const t = now || performance.now();
+    const dt = Math.max(
+      4,
+      Math.min(64, lensSquashLastTick ? t - lensSquashLastTick : 16)
+    );
+    lensSquashLastTick = t;
+    // 没有新的 pointermove = 手指停住或被挡住：速度按指数衰减，产生真实的减速
+    if (t - lensSquashLastT > 16) {
+      lensSquashVX *= Math.exp(-dt / cfg.stopMs);
+    }
+    applyLensSquashDynamics(dt);
+    if (glassActive) renderGlassCover();
+    lensSquashRaf = requestAnimationFrame(lensSquashTick);
+  }
+
+  function startLensSquash() {
+    lensDirCenter = null;
+    lensSquashSpeedRef = 0;
+    lensSquashPrevVX = 0;
+    lensSquashLastTick = 0;
+    resetLensSquash();
+    if (!lensSquashRaf) lensSquashRaf = requestAnimationFrame(lensSquashTick);
+  }
+
+  function stopLensSquash() {
+    if (lensSquashRaf) cancelAnimationFrame(lensSquashRaf);
+    lensSquashRaf = 0;
+    // 松手后让形变平滑回正，避免画布淡出时“跳”回原状
+    const decay = () => {
+      lensSquash += (0 - lensSquash) * 0.09;
+      lensSquashVX *= 0.75;
+      lensSquashAX *= 0.75;
+      if (Math.abs(lensSquash) < 0.004) lensSquash = 0;
+      if (lensSquash === 0) {
+        lensSquashRaf = 0;
+        if (glassActive) renderGlassCover();
+        return;
+      }
+      if (glassActive) renderGlassCover();
+      lensSquashRaf = requestAnimationFrame(decay);
+    };
+    lensSquashRaf = requestAnimationFrame(decay);
+  }
+
+  function renderGlassCover() {
+    if (!glassActive || !glassCover || !glassRenderer || !glassTexture) return;
+    const { root, vc, tg } = getGlassParts();
+    const fill = indicator && indicator.firstElementChild;
+    if (!root || !vc || !fill || !glassOverlayRect || !glassDockShellRect) return;
+    // 遮罩打开期间如果页面已经切换（例如拖动切页），旧纹理属于上一页，
+    // 继续绘制会露出旧页面内容：改成“页面底色占位”的玻璃，并重新抓拍。
+    if (glassTextureKey && getGlassKey(root, vc) !== glassTextureKey) {
+      showGlassPlaceholder();
+      scheduleGlassCapture(0, true);
+      return;
+    }
+    const r = fill.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return;
+    // The texture is captured from hui-view-container, whose content height can
+    // exceed hui-root while scrolling. Sampling must use that same coordinate
+    // space or the lens shows unrelated cards instead of the dock layer.
+    const textureRect = glassRootRect || vc.getBoundingClientRect();
+    // 胶囊按形变后的尺寸绘制；画布保留余量，内容（背景/底栏/图标）都按真实坐标采样。
+    const { s, sx, sy, maxY } = lensSquashFactors();
+    const dockRect = tg ? tg.getBoundingClientRect() : null;
+    // 拉伸边界 = 遮罩停在最左/最右 tab 时的左右边缘（含按住放大的外扩量）
+    const tabsForBounds = tg ? dockTabs(tg) : [];
+    let boundLeft;
+    let boundRight;
+    if (tabsForBounds.length) {
+      const firstTab = tabsForBounds[0].getBoundingClientRect();
+      const lastTab = tabsForBounds[tabsForBounds.length - 1].getBoundingClientRect();
+      boundLeft = firstTab.left - GROW_W;
+      boundRight = lastTab.right + GROW_W;
+    } else {
+      boundLeft = dockRect ? dockRect.left : r.left;
+      boundRight = dockRect ? dockRect.right : r.left + r.width;
+    }
+    // 横向：形变中心 = 运动方向的前沿（左移用左边缘，右移用右边缘），
+    // 长度变化全部由另一侧承担；方向翻转时用当前胶囊边界重新起步，避免跳位。
+    const desiredW = Math.max(8, r.width * sx);
+    const cx = r.left + r.width / 2;
+    const neutral = Math.abs(s) < 0.02;
+    if (lensDirCenter === null || Math.abs(cx - lensDirCenter) > 2 || neutral) {
+      lensDirBaseLeft = r.left;
+      lensDirBaseRight = r.left + r.width;
+      lensDirCenter = cx;
+      lensDirPrev = lensSquashDir;
+    } else if (lensDirPrev !== lensSquashDir) {
+      // 方向变了：以“变向瞬间”的胶囊左右边界作为新的初始位置
+      if (lensLastRight - lensLastLeft > 1) {
+        lensDirBaseLeft = lensLastLeft;
+        lensDirBaseRight = lensLastRight;
+      }
+      lensDirPrev = lensSquashDir;
+    }
+    let lensLeft;
+    let lensRight;
+    if (lensSquashDir < 0) {
+      lensLeft = lensDirBaseLeft;
+      lensRight = lensLeft + desiredW;
+    } else {
+      lensRight = lensDirBaseRight;
+      lensLeft = lensRight - desiredW;
+    }
+    if (lensLeft < boundLeft) {
+      lensLeft = boundLeft;
+      lensRight = lensLeft + desiredW;
+    }
+    if (lensRight > boundRight) {
+      lensRight = boundRight;
+      lensLeft = lensRight - desiredW;
+    }
+    lensLeft = Math.max(boundLeft, lensLeft);
+    lensRight = Math.min(boundRight, lensRight);
+    if (lensRight - lensLeft < 8) lensRight = lensLeft + 8;
+    const lensW = lensRight - lensLeft;
+    lensLastLeft = lensLeft;
+    lensLastRight = lensRight;
+    // 竖向只跟加速度挂钩，不受边界影响
+    const lensH = Math.max(8, r.height * sy);
+    const lensTop = r.top + (r.height - lensH) / 2;
+    // 画布横向覆盖到边界（含 10px 外延），纵向留出高度变化的余量。
+    const marginY = r.height * maxY;
+    const canvasLeft = boundLeft;
+    const canvasW = boundRight - boundLeft;
+    const canvasTop = r.top - marginY;
+    const canvasH = r.height + marginY * 2;
+    glassCover.style.left = `${canvasLeft}px`;
+    glassCover.style.top = `${canvasTop}px`;
+    glassCover.style.width = `${canvasW}px`;
+    glassCover.style.height = `${canvasH}px`;
+    // 跟随胶囊的投影（遮罩是不透明画布，底栏自身阴影被盖住了）。
+    if (glassShadow) {
+      glassShadow.style.left = `${lensLeft}px`;
+      glassShadow.style.top = `${lensTop}px`;
+      glassShadow.style.width = `${lensW}px`;
+      glassShadow.style.height = `${lensH}px`;
+      const baseR = Math.min(r.width, r.height) / 2;
+      const rx = Math.max(0, Math.min(baseR * (lensW / r.width), lensW / 2));
+      const ry = Math.max(0, Math.min(baseR * (lensH / r.height), lensH / 2));
+      glassShadow.style.borderRadius = `${rx}px / ${ry}px`;
+      const outer = getComputedStyle(root).getPropertyValue("--g-dock-outer").trim();
+      const shadowCss = outer
+        ? `${outer}, 0 6px 16px -6px rgba(0,0,0,.16)`
+        : "0 10px 24px -8px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.08)";
+      if (glassShadow.style.boxShadow !== shadowCss) {
+        glassShadow.style.boxShadow = shadowCss;
+      }
+    }
+    // The shader supplies a smooth SDF edge; CSS clipping here would alias it twice.
+    glassCover.style.borderRadius = "0px";
+    const mobile = window.innerWidth <= 700 || window.matchMedia("(pointer: coarse)").matches;
+    const dpr = glassRenderScale();
+    // r 角用“静止时”的半径（px），形变只拉伸/收缩边，不改变圆角大小
+    const radius = Math.min(r.width, r.height) / 2;
+    const tint = root.shadowRoot.querySelector(".glass-tint");
+    const tintCssColor = tint
+      ? getComputedStyle(tint).color
+      : getComputedStyle(root).getPropertyValue("--g-icon-active");
+    const tintColor = parseStatusColor(tintCssColor) || { r: 0, g: 154, b: 199 };
+    // 边框在 shader 里按 SDF 描边；颜色沿用底栏边框的上下两端（明亮 90%）。
+    const light = root.hasAttribute("glass-light");
+    const rim = light
+      ? { top: [225, 225, 225], bottom: [218, 220, 223], alpha: 1 }
+      : { top: [93, 93, 93], bottom: [69, 69, 69], alpha: 0.8 };
+    // 遮罩内的页面要和底栏一样是模糊的，否则会显得“更透更清楚”。
+    const dockFilter =
+      getComputedStyle(root).getPropertyValue("--g-dock-filter").trim() || "";
+    const blurMatch = dockFilter.match(/blur\(\s*([\d.]+)px/i);
+    const blurPx = blurMatch ? Number(blurMatch[1]) : 0;
+    glassRenderer.resize(canvasW, canvasH, dpr);
+    glassRenderer.render({
+      containerW: textureRect.width,
+      containerH: textureRect.height,
+      overlayLeft: glassOverlayRect.left,
+      overlayTop: glassOverlayRect.top,
+      overlayWidth: glassOverlayRect.width,
+      overlayHeight: glassOverlayRect.height,
+      shellLeft: glassDockShellRect.left,
+      shellTop: glassDockShellRect.top,
+      shellWidth: glassDockShellRect.width,
+      shellHeight: glassDockShellRect.height,
+      shellScaleX: GLASS_DOCK_SCALE_X,
+      shellScaleY: GLASS_DOCK_SCALE_Y,
+      tintR: tintColor.r / 255,
+      tintG: tintColor.g / 255,
+      tintB: tintColor.b / 255,
+      rimTopR: rim.top[0] / 255,
+      rimTopG: rim.top[1] / 255,
+      rimTopB: rim.top[2] / 255,
+      rimBottomR: rim.bottom[0] / 255,
+      rimBottomG: rim.bottom[1] / 255,
+      rimBottomB: rim.bottom[2] / 255,
+      rimAlpha: rim.alpha,
+      borderPx: 0.5,
+      capsuleLeft: canvasLeft - textureRect.left,
+      capsuleTop: canvasTop - textureRect.top,
+      foregroundCapsuleLeft: canvasLeft,
+      foregroundCapsuleTop: canvasTop,
+      capsuleCenterX: lensLeft - canvasLeft + lensW / 2,
+      capsuleCenterY: lensTop - canvasTop + lensH / 2,
+      capsuleHalfW: lensW / 2,
+      capsuleHalfH: lensH / 2,
+      // 形变 = 未形变胶囊按 (sx, sy) 缩放：水平距离按 sx、垂直距离按 sy
+      capsuleScaleX: r.width > 0 ? lensW / r.width : 1,
+      capsuleScaleY: r.height > 0 ? lensH / r.height : 1,
+      baseHalfW: r.width / 2,
+      baseHalfH: r.height / 2,
+      baseRadius: radius,
+      dpr,
+      blurRadiusPx: blurPx,
+      edgeMapStartPx: radius * 0.3,
+      edgeMapMaxPx: 0,
+      ssaa: mobile ? 1 : 2,
+    });
+  }
+
+  function revealGlassCover() {
+    if (!glassActive || !glassTexture || !glassCover || !glassRenderer) return;
+    const fill = indicator && indicator.firstElementChild;
+    if (!fill) return;
+    glassCover.style.opacity = "1";
+    if (glassShadow) glassShadow.style.opacity = "1";
+    fill.style.setProperty("background", "transparent");
+    fill.style.setProperty("-webkit-backdrop-filter", "none");
+    fill.style.setProperty("backdrop-filter", "none");
+    renderGlassCover();
+  }
+
+  // 页面已经换了时不能继续显示旧纹理：退回 CSS 实时磨砂，等新快照落地再显示。
+  function hideGlassCover() {
+    if (glassCover) glassCover.style.opacity = "0";
+    if (glassShadow) glassShadow.style.opacity = "0";
+    const fill = indicator && indicator.firstElementChild;
+    if (!fill) return;
+    fill.style.setProperty("background", "var(--g-dock-glass-surface)");
+    fill.style.setProperty("-webkit-backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
+    fill.style.setProperty("backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
+  }
+
+  // 按下后如果一直没有纹理（抓拍失败/被丢弃/底栏刚重建），持续重试，
+  // 避免只剩放大的高亮块而没有玻璃遮罩。
+  function ensureGlassReady() {
+    if (!glassActive || glassTexture || glassRetryTimer) return;
+    const now = performance.now();
+    if (!glassRetryUntil) glassRetryUntil = now + 6000;
+    if (now > glassRetryUntil) {
+      glassRetryUntil = 0;
+      return;
+    }
+    glassRetryTimer = setTimeout(() => {
+      glassRetryTimer = 0;
+      if (!glassActive || glassTexture) return;
+      captureGlassBackground();
+      ensureGlassReady();
+    }, 150);
+  }
+
+  function stopGlassRetry() {
+    clearTimeout(glassRetryTimer);
+    glassRetryTimer = 0;
+    glassRetryUntil = 0;
+  }
+
+  // 页面背景色（用于还没拿到快照时先填底）
+  function glassPlaceholderColor(root, vc) {
+    const pick = (value) =>
+      value && value !== "transparent" && value !== "rgba(0, 0, 0, 0)" ? value : null;
+    const fromView = vc ? pick(getComputedStyle(vc).backgroundColor) : null;
+    if (fromView) return fromView;
+    const fromRoot = root ? pick(getComputedStyle(root).backgroundColor) : null;
+    if (fromRoot) return fromRoot;
+    return root && root.hasAttribute("glass-light") ? "#fafafa" : "#111214";
+  }
+
+  // 切页后、新快照还没好：立刻显示玻璃遮罩（外壳 + 图标沿用上一次），
+  // 底栏之外的背景先用页面底色填充，等快照完成再替换成真实内容。
+  function showGlassPlaceholder() {
+    if (!glassRenderer || !glassCover) return;
+    const { root, tg, vc, tabsEl } = getGlassParts();
+    if (!root || !tg || !vc) return;
+    const tgRect = tg.getBoundingClientRect();
+    if (!tgRect.width || !tgRect.height) return;
+    const light = root.hasAttribute("glass-light");
+    const scale = glassScale || 1;
+    const radius =
+      (parseFloat(getComputedStyle(root).getPropertyValue("--g-dock-radius")) || 30) * scale;
+    const shellLayer = buildDockShellLayer(tgRect, scale, radius, light);
+    if (!shellLayer) return;
+    const solid = document.createElement("canvas");
+    solid.width = 8;
+    solid.height = 8;
+    const sctx = solid.getContext("2d");
+    sctx.fillStyle = glassPlaceholderColor(root, vc);
+    sctx.fillRect(0, 0, 8, 8);
+    glassRenderer.setImage(solid);
+    glassRenderer.setShell(shellLayer.canvas);
+    glassShellCanvas = shellLayer.canvas;
+    if (glassLastOverlay) glassRenderer.setOverlay(glassLastOverlay);
+    glassTexture = solid;
+    glassTextureKey = getGlassKey(root, vc);
+    glassRootRect = vc.getBoundingClientRect();
+    glassDockShellRect = shellLayer.rect;
+    if (!glassOverlayRect && tabsEl) {
+      const tabsRect = tabsEl.getBoundingClientRect();
+      if (tabsRect.width > 1) {
+        glassOverlayRect = {
+          left: tabsRect.left,
+          top: tabsRect.top,
+          width: tabsRect.width,
+          height: tabsRect.height,
+        };
+      }
+    }
+    glassDirty = true;
+    glassForceCapture = true;
+    revealGlassCover();
+  }
+
+  function initGlassCover() {
+    if (!ensureGlassRenderer()) return;
+    const { root, vc } = getGlassParts();
+    const keyChanged = root && vc && getGlassKey(root, vc) !== glassTextureKey;
+    if (!glassTexture || glassDirty || keyChanged) {
+      if (keyChanged || !glassTexture) {
+        // 快照属于别的页面（或还没有快照）：马上用“页面底色占位”开出玻璃遮罩，
+        // 等新快照完成后再替换成真实内容。
+        glassDirty = true;
+        showGlassPlaceholder();
+      } else {
+        // 同一页面的旧帧：先显示，等新快照替换（视觉上连续）。
+        revealGlassCover();
+      }
+      captureGlassBackground();
+      // 抓拍失败/被丢弃时继续重试，避免只剩放大的高亮块。
+      ensureGlassReady();
+      return;
+    }
+    revealGlassCover();
+  }
+
+  function warmGlassTexture() {
+    if (!ensureGlassRenderer()) return;
+    glassDirty = true;
+    glassForceCapture = true;
+    const { root, vc } = getGlassParts();
+    const onScroll = scheduleGlassScrollCapture;
+    [vc, root && findScrollHost(root)].forEach((target) => {
+      if (!target || target.dataset.glassTextureEvents === "1") return;
+      target.dataset.glassTextureEvents = "1";
+      target.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    });
+    observeGlassView(vc);
+    captureGlassBackground();
+  }
+
+  // 滚动时先立即拍一张（保证随时按下都有当前背景），滚动停止后再补拍最后位置。
+  function scheduleGlassScrollCapture() {
+    if (dragState) return;
+    const now = performance.now();
+    if (now - glassLastScrollCaptureAt > 400) {
+      glassLastScrollCaptureAt = now;
+      scheduleGlassCapture(0, true);
+    }
+    clearTimeout(glassScrollCaptureTimer);
+    glassScrollCaptureTimer = setTimeout(() => {
+      glassScrollCaptureTimer = 0;
+      glassLastScrollCaptureAt = performance.now();
+      scheduleGlassCapture(0, true);
+    }, 160);
+  }
+
+  // A swipe / scroll can move content beneath the lens; keep the cached scene current.
+  window.addEventListener("resize", () => scheduleGlassCapture(120));
+  window.addEventListener("scroll", scheduleGlassScrollCapture, {
+    capture: true,
+    passive: true,
+  });
+
+  // Tilt the same pixels as the standalone test: background glass, dock below it,
+  // and a separately sampled native icon/label layer.
   function setLensGrow(tabs, on) {
     if (!indicator || !indicator.isConnected) return;
     const fill = indicator.firstElementChild;
     if (!fill) return;
+    if (on) {
+      glassActive = true;
+      // Instant CSS fallback while a newly navigated page's texture is warming.
+      // The WebGL cover replaces this as soon as a complete scene is ready.
+      fill.style.setProperty("background", "var(--g-dock-glass-surface)");
+      fill.style.setProperty("-webkit-backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
+      fill.style.setProperty("backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
+      initGlassCover();
+    } else {
+      glassActive = false;
+      clearTimeout(glassOverlayRefreshTimer);
+      glassOverlayRefreshTimer = 0;
+      stopGlassRetry();
+      if (glassCover) glassCover.style.opacity = "0";
+      if (glassShadow) glassShadow.style.opacity = "0";
+      fill.style.setProperty("background", "var(--g-lens-bg)");
+      fill.style.setProperty("-webkit-backdrop-filter", "none");
+      fill.style.setProperty("backdrop-filter", "none");
+      // 拖动期间被推迟的抓拍，松手后再补上。
+      if (glassDirty) scheduleGlassCapture(0, true);
+    }
     const dx = on ? `-${GROW_W}px` : "0px";
     const dy = on ? `-${GROW_H_OFF}px` : "0px";
     if (fill.style.left !== dx) fill.style.left = dx;
     if (fill.style.right !== dx) fill.style.right = dx;
     if (fill.style.top !== dy) fill.style.top = dy;
     if (fill.style.bottom !== dy) fill.style.bottom = dy;
-    // 蓝色裁剪跟着一起变宽
     if (tabs && tabs.length) trackHover(tabs, reduceMotion ? 0 : GROW_MS + 120);
   }
 
-  // 切到某个视图：改 URL + 派发 location-changed（等价于 HA 内部的 navigate）
+  // Tab/path navigation keeps the glass texture cache fresh after HA changes view.
   function goToPath(path) {
     if (!path) return false;
     const seg = location.pathname.split("/").filter(Boolean);
@@ -1714,16 +3529,13 @@ ${P} hui-view-container {
     if (path === cur) return false;
     const base = seg.length ? `/${seg[0]}` : "";
     history.pushState(null, "", `${base}/${encodeURIComponent(path)}`);
-    window.dispatchEvent(
-      new CustomEvent("location-changed", {
-        bubbles: true,
-        composed: true,
-        detail: { replace: false },
-      })
-    );
+    window.dispatchEvent(new CustomEvent("location-changed", {
+      bubbles: true,
+      composed: true,
+      detail: { replace: false },
+    }));
     return true;
   }
-
   function goToTab(tab) {
     return goToPath(tab && tab.getAttribute("data-path"));
   }
@@ -1754,9 +3566,8 @@ ${P} hui-view-container {
     return false;
   }
 
-  // 图标颜色唯一依据：黑色高亮块此刻盖住了哪一段。
-  // 被盖住的那一段变强调色，没盖住的那一段保持未选中色（见 CSS 的 .glass-tint）。
-  // 返回的是"视觉上"的矩形：按住加高 / 加宽时取实际尺寸；圆角是胶囊的半圆端 = 高度/2。
+  // Follow v1.1.1's pill geometry. The growing fill contains the normal
+  // highlighter and the glass replacement area, so both regions tint together.
   function indicatorSpan() {
     if (!indicator || !indicator.isConnected) return null;
     const t = getComputedStyle(indicator).transform;
@@ -1764,13 +3575,13 @@ ${P} hui-view-container {
     const tx = m ? Number(m[1].split(",")[4]) : indicator.offsetLeft;
     const fill = indicator.firstElementChild;
     const dx = fill ? fill.offsetLeft : 0;
-    const fw = fill ? fill.offsetWidth : indicator.offsetWidth;
-    const fh = fill ? fill.offsetHeight : indicator.offsetHeight;
-    return { x: tx + dx, w: fw, rad: fh / 2 };
+    const width = fill ? fill.offsetWidth : indicator.offsetWidth;
+    const height = fill ? fill.offsetHeight : indicator.offsetHeight;
+    return { x: tx + dx, w: width, rad: height / 2 };
   }
 
-  // 按高亮块的实际位置给每个 tab 的蓝色副本算裁剪范围。
-  // 裁剪区域和胶囊块的形状一致：块的两端是半圆，被格子边缘切开的那一侧是直线。
+  // Match v1.1.1: clip the accent glyph to the rounded part of each tab covered
+  // by the highlighter; the glass mask uses the same expanded fill geometry.
   function syncTint(tabs) {
     const span = indicatorSpan();
     if (!span || !tabs || !tabs.length) return;
@@ -1781,7 +3592,6 @@ ${P} hui-view-container {
       const w = tab.offsetWidth || 1;
       const visL = Math.max(0, Math.min(w, span.x - left));
       const visR = Math.max(0, Math.min(w, span.x + span.w - left));
-      // 只有"块自己的端头"才是圆角；被格子边界切掉的那一侧保持直角
       const rl = visL > 0.5 ? span.rad : 0;
       const rr = w - visR > 0.5 ? span.rad : 0;
       const clip = `inset(0 ${Math.max(0, w - visR)}px 0 ${visL}px round ${rl}px ${rr}px ${rr}px ${rl}px)`;
@@ -1797,13 +3607,14 @@ ${P} hui-view-container {
     const step = () => {
       if (!tabs[0] || !tabs[0].isConnected) return;
       syncTint(tabs);
+      if (glassActive) renderGlassCover();
       if (performance.now() < deadline) hoverRaf = requestAnimationFrame(step);
     };
     hoverRaf = requestAnimationFrame(step);
   }
 
   // 手势：按下即生效（不需要长按），横向拖动时选中块跟手；
-  // 在某一格停留超过 200ms 自动切过去；松手吸到最近一格。
+  // 拖动期间只移动遮罩，高亮所在 tab 只在松手时切换。
   // 图标颜色只跟"高亮块盖住哪一段"走，见 syncTint。
   function attachDockDrag(tg, tabsEl) {
     if (tg.dataset.glassDrag === "1") return;
@@ -1835,15 +3646,7 @@ ${P} hui-view-container {
       if (idx < 0 || !state.tabs[idx]) return;
       if (state.hoverIdx === idx) return;
       state.hoverIdx = idx;
-      state.hapticFired = false;
       clearTimeout(state.dwellTimer);
-      state.dwellTimer = setTimeout(() => {
-        if (dragState !== state) return;
-        const changed = goToTab(state.tabs[idx]);
-        if (changed && !state.hapticFired) {
-          state.hapticFired = emitDockHaptic();
-        }
-      }, 200);
     };
 
     tg.addEventListener(
@@ -1872,6 +3675,7 @@ ${P} hui-view-container {
           active: true,
           settled: false,
           grown: false,
+          tg,
           startX: ev.clientX,
           startY: ev.clientY,
           tabs,
@@ -1885,6 +3689,8 @@ ${P} hui-view-container {
           hapticFired: false,
         };
         dragState = state;
+        tg.classList.add("glass-dragging");
+        startLensSquash();
 
         // 按住一小会儿（或开始横向拖动）就把高亮块放大，松手缩回
         state.growTimer = setTimeout(() => {
@@ -1948,6 +3754,7 @@ ${P} hui-view-container {
       }
       const { x, m } = clampX(ev.clientX, dragState.tabs);
       indicator.style.transform = `translate(${x}px, ${m.top}px)`;
+      updateLensSquash(ev.clientX, ev.timeStamp || performance.now());
       const idx = Math.max(
         0,
         Math.min(
@@ -1957,6 +3764,8 @@ ${P} hui-view-container {
       );
       cancelAnimationFrame(hoverRaf);
       syncTint(dragState.tabs);
+      renderGlassCover();
+      scheduleGlassOverlayRefresh();
       armDwell(dragState, idx);
     });
 
@@ -1965,16 +3774,19 @@ ${P} hui-view-container {
       if (ev.pointerId !== dragState.pointerId) return;
       const state = dragState;
       dragState = null;
+      tg.classList.remove("glass-dragging");
+      stopLensSquash();
       clearTimeout(state.settleTimer);
       clearTimeout(state.dwellTimer);
       clearTimeout(state.growTimer);
       cancelAnimationFrame(hoverRaf);
 
       const { x, m } = clampX(ev.clientX, state.tabs);
-      const idx = Math.max(
-        0,
-        Math.min(state.tabs.length - 1, Math.round((x - m.pad) / m.cellW))
-      );
+      const releaseIdx =
+        state.hoverIdx >= 0
+          ? state.hoverIdx
+          : Math.round((x - m.pad) / m.cellW);
+      const idx = Math.max(0, Math.min(state.tabs.length - 1, releaseIdx));
       const target = state.tabs[idx];
 
       // 松手：高亮块缩回原大小 + 吸到最近一格，两个动画同时跑
@@ -1982,7 +3794,20 @@ ${P} hui-view-container {
       indicator.style.transition = IND_TRANSITION;
       indicator.style.transform = `translate(${target.offsetLeft}px, ${target.offsetTop}px)`;
       snapUntil = Date.now() + MOVE_MS + 400;
-      goToTab(target);
+      const moved =
+        Math.abs(ev.clientX - state.startX) > 4 ||
+        Math.abs(ev.clientY - state.startY) > 4;
+      if (moved) {
+        // Don't let HA's synthesized click select the original press target.
+        suppressDockClickUntil = Date.now() + 600;
+        suppressSwipeClick = {
+          until: Date.now() + 700,
+          x: ev.clientX,
+          y: ev.clientY,
+        };
+      }
+      const changed = goToTab(target);
+      if (changed && !state.hapticFired) emitDockHaptic();
       // 吸附动画期间颜色继续跟着高亮块，动画结束停在目标格
       trackHover(state.tabs, reduceMotion ? 0 : MOVE_MS + 180);
     };
@@ -2009,6 +3834,11 @@ ${P} hui-view-container {
     });
 
     tg.addEventListener("pointerup", finish);
+    tg.addEventListener("lostpointercapture", (ev) => {
+      if (dragState && ev.pointerId === dragState.pointerId) {
+        cancelStaleDockDrag(tg, []);
+      }
+    });
     tg.addEventListener("pointercancel", (ev) => {
       if (!dragState) return;
       if (ev.pointerId !== dragState.pointerId) return;
@@ -2018,6 +3848,7 @@ ${P} hui-view-container {
       cancelAnimationFrame(hoverRaf);
       const tabs = dragState.tabs;
       dragState = null;
+      tg.classList.remove("glass-dragging");
       setLensGrow(tabs, false);
       if (indicator) {
         indicator.style.transition = IND_TRANSITION;
@@ -2266,11 +4097,41 @@ ${P} hui-view-container {
     });
   }
 
+  function cancelStaleDockDrag(tg, currentTabs) {
+    const state = dragState;
+    if (!state) return;
+    const stale =
+      state.tg !== tg ||
+      state.tabs.some((tab) => !tab.isConnected || !currentTabs.includes(tab));
+    if (!stale) return;
+
+    dragState = null;
+    clearTimeout(state.settleTimer);
+    clearTimeout(state.dwellTimer);
+    clearTimeout(state.growTimer);
+    cancelAnimationFrame(hoverRaf);
+    stopLensSquash();
+    if (state.tg) state.tg.classList.remove("glass-dragging");
+    if (indicator && indicator.isConnected) {
+      setLensGrow(state.tabs, false);
+    } else {
+      glassActive = false;
+      if (glassCover) glassCover.style.opacity = "0";
+    }
+    // The old pointer belongs to a replaced tab group. Let the freshly rendered
+    // indicator snap to the current HA tab instead of writing stale coordinates.
+    snapUntil = 0;
+  }
+
   function syncIndicator(toolbar) {
     const tg = toolbar.querySelector("ha-tab-group");
     const tabsEl = tg && tg.shadowRoot && tg.shadowRoot.querySelector(".tabs");
-    if (!tabsEl) return;
+    if (!tabsEl) {
+      if (tg) cancelStaleDockDrag(tg, []);
+      return;
+    }
     const tabs = dockTabs(toolbar);
+    cancelStaleDockDrag(tg, tabs);
     if (!tabs.length) return;
 
     // HA may render horizontal scroll arrows when it thinks the native tab row
@@ -2304,6 +4165,22 @@ ${P} hui-view-container {
     );
     const el = tabs[idx];
     if (!el.offsetWidth) return;
+    const tabsRect = tabsEl.getBoundingClientRect();
+    const tabRect = el.getBoundingClientRect();
+    if (
+      tabsRect.width < 2 ||
+      tabsRect.height < 2 ||
+      tabRect.width < 2 ||
+      tabRect.height < 2 ||
+      tabRect.right < tabsRect.left ||
+      tabRect.left > tabsRect.right ||
+      tabRect.bottom < tabsRect.top ||
+      tabRect.top > tabsRect.bottom
+    ) {
+      // During HA view replacement, tab slots can briefly report zero/out-of-dock
+      // coordinates. Keep the last valid indicator position until layout settles.
+      return;
+    }
 
     const x = el.offsetLeft;
     const y = el.offsetTop;
@@ -2350,16 +4227,32 @@ ${P} hui-view-container {
 
       tabsEl.appendChild(indicator);
       syncTint(tabs);
+      clearTimeout(glassWarmupTimer);
+      // Warm WebGL, background, shell and native glyph textures as soon as the
+      // dock exists, not on the first press.
+      glassWarmupTimer = setTimeout(warmGlassTexture, 0);
       return;
     }
 
-    indicator.style.width = `${w}px`;
-    indicator.style.height = `${h}px`;
+    const widthStyle = `${w}px`;
+    const heightStyle = `${h}px`;
+    const transformStyle = `translate(${x}px, ${y}px)`;
+    const geometryChanged =
+      indicator.style.width !== widthStyle ||
+      indicator.style.height !== heightStyle ||
+      indicator.style.borderRadius !== radius;
+    const positionChanged = indicator.style.transform !== transformStyle;
+    indicator.style.width = widthStyle;
+    indicator.style.height = heightStyle;
     indicator.style.borderRadius = radius;
-    indicator.style.transform = `translate(${x}px, ${y}px)`;
-    // 高亮块挪到新位置后，颜色跟着块走（切换页面时块有移动动画）
+    if (positionChanged) indicator.style.transform = transformStyle;
+    if (performance.now() < pageTintUntil) return;
+    // A page switch can trigger several refreshes while HA renders the view.
+    // Restart tint tracking only for a real indicator move/resize, not each pass.
     syncTint(tabs);
-    trackHover(tabs, reduceMotion ? 0 : MOVE_MS + 180);
+    if (positionChanged || geometryChanged) {
+      trackHover(tabs, reduceMotion ? 0 : MOVE_MS + 180);
+    }
   }
 
   // dock 要在「内容区」居中（宽屏有侧边栏时不能按窗口居中）
@@ -2417,6 +4310,7 @@ ${P} hui-view-container {
       scrollHost = host;
       scrollHostStyle = host.getAttribute("style");
       host.style.setProperty("height", "100%");
+      host.style.setProperty("overflow-x", "hidden");
       host.style.setProperty("overflow-y", "auto");
       host.style.setProperty("overscroll-behavior-y", "contain");
       host.style.setProperty("-webkit-overflow-scrolling", "touch");
@@ -2476,11 +4370,114 @@ ${P} hui-view-container {
     }
   }
 
+  // ---- PC 顶栏动作胶囊：把 ⋮ 菜单条目摊成图标 ---------------------------------
+  let glassActionsCapsule = null;
+  let glassActionsSig = "";
+  let glassActionsHost = null;
+
+  let glassActionsAnchor = null;
+
+  function syncActionsCapsule(root, toolbar) {
+    const host = toolbar && toolbar.querySelector(".action-items");
+    const dd = host && host.querySelector("ha-dropdown");
+    const wide = window.matchMedia("(min-width: 871px)").matches;
+    const enabled = wide && !!dd && !!root && root.hasAttribute("glass-on");
+    if (!enabled) {
+      if (glassActionsCapsule) {
+        // 还原：把原生控件放回 action-items，胶囊隐藏
+        [...glassActionsCapsule.children].forEach((node) => host && host.appendChild(node));
+        glassActionsCapsule.style.display = "none";
+      }
+      if (glassActionsHost) glassActionsHost.classList.remove("glass-actions-on");
+      glassActionsAnchor = null;
+      return;
+    }
+    // 首次启用（或胶囊被清空）时，用 ⋮ 当时的位置作为右端锚点；
+    // 布局还没就绪（rect 为 0）就等下一次刷新，避免锚点算成屏幕外。
+    if (!glassActionsCapsule || glassActionsHost !== host || !glassActionsCapsule.isConnected) {
+      if (glassActionsCapsule) glassActionsCapsule.remove();
+      glassActionsCapsule = null;
+    }
+    if (!glassActionsCapsule || glassActionsCapsule.children.length === 0) {
+      // ha-dropdown 本身没有布局盒，位置以里面的触发按钮为准
+      const anchorEl = dd.querySelector("ha-icon-button") || dd;
+      const ddRect = anchorEl.getBoundingClientRect();
+      if (ddRect.width < 1 || ddRect.height < 1 || ddRect.right < 1) {
+        if (glassActionsCapsule) {
+          glassActionsCapsule.remove();
+          glassActionsCapsule = null;
+        }
+        return;
+      }
+      const cs = getComputedStyle(host);
+      const btn = parseFloat(cs.getPropertyValue("--g-btn")) || 46;
+      glassActionsAnchor = {
+        right: Math.max(0, window.innerWidth - ddRect.right),
+        top: ddRect.top,
+        height: ddRect.height || btn,
+        btn,
+      };
+      if (!glassActionsCapsule) {
+        const el = document.createElement("div");
+        el.className = "glass-actions-capsule";
+        host.appendChild(el);
+        glassActionsCapsule = el;
+        glassActionsHost = host;
+      }
+    }
+    const el = glassActionsCapsule;
+    host.classList.add("glass-actions-on");
+    // 只收桌面版这 3 个动作按钮：排除移动端变体（button-0 / dashboardmenu）
+    // 以及 HA 重复渲染出来的同 id 节点，避免胶囊里出现两套图标。
+    const isDesktopAction = (btn) =>
+      btn &&
+      btn.tagName === "HA-ICON-BUTTON" &&
+      btn.id !== "button-0" &&
+      btn.id !== "dashboardmenu";
+    const direct = [...host.children].filter(isDesktopAction);
+    let controls;
+    if (direct.length) {
+      const byId = new Map();
+      direct.forEach((btn) => {
+        const key = btn.id || `anon-${byId.size}`;
+        if (!byId.has(key)) byId.set(key, btn);
+      });
+      controls = [...byId.values()];
+    } else {
+      // 已经收进胶囊的情况：沿用当前的 3 个按钮
+      controls = [...el.children].filter((node) => node.tagName === "HA-ICON-BUTTON");
+    }
+    controls.push(dd);
+    // HA 重建 toolbar 时旧节点会被换掉：清掉胶囊里已不在当前控件列表中的节点
+    const keep = new Set(controls);
+    [...el.children].forEach((node) => {
+      if (!keep.has(node)) node.remove();
+    });
+    controls.forEach((node) => {
+      if (node.parentElement !== el) el.appendChild(node);
+    });
+    const anchor = glassActionsAnchor;
+    if (!anchor) return;
+    const count = el.children.length || 4;
+    const gap = 10; // 与 CSS 里的 gap 保持一致
+    el.style.display = "flex";
+    el.style.top = anchor.top + "px";
+    el.style.height = anchor.height + "px";
+    el.style.right = anchor.right + "px";
+    el.style.left = "auto";
+    el.style.width = anchor.btn * count + gap * (count - 1) + "px";
+  }
+
   function refresh() {
     const { root, panel, ha, drawer } = parts();
     const themes = ha && ha.hass && ha.hass.themes;
     const light = Boolean(themes && themes.darkMode === false);
-    styleSidebarFrame(drawer, root, light);
+    // 侧栏装饰失败不应影响整页皮肤，单独兜住异常。
+    try {
+      styleSidebarFrame(drawer, root, light);
+    } catch (err) {
+      log("sidebar frame failed", err);
+    }
     if (!root || !root.shadowRoot) return;
     const toolbar = root.shadowRoot.querySelector(".toolbar");
     if (!toolbar) return;
@@ -2507,6 +4504,7 @@ ${P} hui-view-container {
     injectStyle(root);
     styleSidebarFrame(drawer, root, light);
     syncSidebarButtonState(root, drawer);
+    syncActionsCapsule(root, toolbar);
     lockRootScroll(root);
 
     // 切页后新视图从页面顶部开始（滚动现在在内容层里，窗口不再是滚动容器）
@@ -2568,6 +4566,7 @@ ${P} hui-view-container {
   // 这里在切页后的 400ms 内用 rAF 连续补刷（rAF 在绘制前执行，能赶在标题被画出来之前隐藏）
   let fastUntil = 0;
   let rafId = 0;
+  let lastObservedLocationPath = location.pathname;
   const fastTick = () => {
     rafId = 0;
     safeRefresh();
@@ -2579,7 +4578,41 @@ ${P} hui-view-container {
   };
 
   const onLocationChanged = () => {
+    // If HA navigated/replaced the tab group while a pointer was captured, don't
+    // leave the old drag class/indicator transform attached to the new page.
+    if (dragState) cancelStaleDockDrag(dragState.tg, []);
+    const path = location.pathname;
+    if (path === lastObservedLocationPath) {
+      safeRefresh();
+      return;
+    }
+    lastObservedLocationPath = path;
     fastCatchUp();
+    glassLastSwitchAt = performance.now();
+    observeGlassView(getGlassParts().vc);
+    // 切页后视图是异步重建的：先拍一张，等布局稳定后再补拍一张，
+    // 这样下次按住遮罩时背景已经是新页面。
+    scheduleGlassCapture(80, true);
+    clearTimeout(glassViewSettleTimer);
+    glassViewSettleTimer = setTimeout(() => {
+      glassViewSettleTimer = 0;
+      scheduleGlassCapture(0, true);
+    }, 450);
+    if (!dragState && Date.now() >= snapUntil) {
+      // On a native page change, keep the existing tint still while HA and the
+      // indicator settle; apply the final tint once instead of sweeping/flashing
+      // it repeatedly during the repeated fast refreshes.
+      cancelAnimationFrame(hoverRaf);
+      hoverRaf = 0;
+      pageTintUntil = performance.now() + MOVE_MS;
+      clearTimeout(pageTintTimer);
+      pageTintTimer = setTimeout(() => {
+        pageTintUntil = 0;
+        const { root } = parts();
+        const toolbar = root && root.shadowRoot && root.shadowRoot.querySelector(".toolbar");
+        if (toolbar) syncTint(dockTabs(toolbar));
+      }, MOVE_MS + 20);
+    }
     safeRefresh();
   };
 
