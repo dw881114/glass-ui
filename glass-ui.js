@@ -469,6 +469,51 @@ ${P} .action-items ha-dropdown ha-icon-button::after {
   pointer-events: none;
 }
 
+/* ☰ / ⋮ 也套用底栏的内侧高光：上下两端最亮、往中间迅速衰减。
+   用子选择器限定「独立圆钮」的情况，胶囊内的图标按钮由胶囊统一提供高光。 */
+:host([glass-on]:not([glass-light])) .glass-menu::before,
+:host([glass-on]:not([glass-light])) .action-items > ha-dropdown ha-icon-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(105, 108, 113, .55),
+    inset 0 0 2px 1px rgba(105, 108, 113, .28);
+  -webkit-mask-image: linear-gradient(180deg,
+    #000 0,
+    transparent calc(50% - 10px),
+    transparent calc(50% + 10px),
+    #000 100%);
+  mask-image: linear-gradient(180deg,
+    #000 0,
+    transparent calc(50% - 10px),
+    transparent calc(50% + 10px),
+    #000 100%);
+}
+:host([glass-on][glass-light]) .glass-menu::before,
+:host([glass-on][glass-light]) .action-items > ha-dropdown ha-icon-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 1),
+    inset 0 0 2px 1px rgba(255, 255, 255, .30);
+  -webkit-mask-image: linear-gradient(180deg,
+    #000 0,
+    transparent 5px,
+    transparent calc(100% - 5px),
+    #000 100%);
+  mask-image: linear-gradient(180deg,
+    #000 0,
+    transparent 5px,
+    transparent calc(100% - 5px),
+    #000 100%);
+}
+
 /* ==========================================================================
    右上 ⋮
    ========================================================================== */
@@ -2441,6 +2486,7 @@ void main() {
   let glassOverlayTimer = 0;
   let glassOverlayRefreshTimer = 0;
   let glassDirty = true;
+  let glassDeferredCapture = false;
   let glassWarmupTimer = 0;
   let glassCaptureTimer = 0;
   let glassCaptureRevision = 0;
@@ -2477,6 +2523,12 @@ void main() {
     outputSmooth: 0.11, // 输出插值系数（越小越慢越顺）
     flipBoost: 1.8, // 形变方向翻转时的加速系数（让“变高/变扁”能及时出现）
     returnMs: 200, // 松手回弹时长（几何直出后仅作参考）
+    // 点按切页专用：正常点一下的加速度远小于拖动，单独放宽门槛，
+    // 让「一格」的位移也能拉到最大拉伸幅度。
+    tapAccelFull: 900,
+    tapVelGate: 40,
+    tapVelGateFull: 120,
+    tapOutputSmooth: 0.5,
   };
   let lensSquash = 0;
   let lensSquashVX = 0;
@@ -2505,6 +2557,7 @@ void main() {
   let glassShellCanvas = null;
   const GLASS_DOCK_SCALE_X = 1.1;
   const GLASS_DOCK_SCALE_Y = 1.1;
+  const GLASS_COARSE_POINTER = window.matchMedia("(pointer: coarse)").matches;
 
   function glassRenderScale() {
     return Math.min(3, Math.max(1, glassScale, window.devicePixelRatio || 1));
@@ -2645,6 +2698,13 @@ void main() {
   // and an independently sampled tab foreground, exactly like the test page.
   async function captureGlassBackground() {
     if (glassBusy || !ensureGlassRenderer()) return;
+    // 点按过渡只有 ~1s：这期间不跑 snapdom（它会阻塞主线程），
+    // 玻璃继续用上一帧，动画结束后再补拍。
+    if (tapLensActive) {
+      glassDirty = true;
+      glassDeferredCapture = true;
+      return;
+    }
     const captureRevision = glassCaptureRevision;
     const { root, tg, vc, tabsEl } = getGlassParts();
     if (!root || !tg || !vc || !tabsEl) {
@@ -2742,6 +2802,12 @@ void main() {
         }
       }
 
+      if (tapLensActive) {
+        // 点按过渡期间永远不把真实快照放进遮罩：保持纯色图层，结束再拍
+        glassDirty = true;
+        glassDeferredCapture = true;
+        return;
+      }
       const previousTexture = glassTexture;
       const previousTextureKey = glassTextureKey;
       const previousRootRect = glassRootRect;
@@ -2934,6 +3000,13 @@ void main() {
     glassDirty = true;
     glassCaptureRevision++;
     if (force) glassForceCapture = true;
+    // 点按玻璃动画期间不排队抓拍：snapdom 会卡住主线程，等过渡结束再补。
+    if (tapLensActive) {
+      glassDeferredCapture = true;
+      clearTimeout(glassCaptureTimer);
+      glassCaptureTimer = 0;
+      return;
+    }
     clearTimeout(glassCaptureTimer);
     glassCaptureTimer = setTimeout(() => {
       // 拖动遮罩本身不会改变页面内容，拖动期间不抓背景；
@@ -3079,12 +3152,17 @@ void main() {
 
     const along = lensSquashAX * lensSquashDir;
     const dead = cfg.accelDead;
-    const full = Math.max(dead + 1, cfg.accelFull);
+    // 点按切页：用更灵敏的满量程 / 速度门槛 / 输出速率，
+    // 让正常点一下（一格）就能达到最大拉伸幅度。
+    const full = Math.max(dead + 1, tapLensActive ? (cfg.tapAccelFull ?? cfg.accelFull) : cfg.accelFull);
     const mag = Math.abs(along);
     const norm = mag <= dead ? 0 : Math.min(1, (mag - dead) / (full - dead));
 
-    const gateLo = cfg.velGate;
-    const gateHi = Math.max(gateLo + 1, cfg.velGateFull);
+    const gateLo = tapLensActive ? (cfg.tapVelGate ?? cfg.velGate) : cfg.velGate;
+    const gateHiFull = tapLensActive
+      ? (cfg.tapVelGateFull ?? cfg.velGateFull)
+      : cfg.velGateFull;
+    const gateHi = Math.max(gateLo + 1, gateHiFull);
     let gate =
       lensSquashSpeedRef <= gateLo
         ? 0
@@ -3094,13 +3172,16 @@ void main() {
     const target = (along >= 0 ? 1 : -1) * norm * gate;
     // 方向翻转（拉伸 ↔ 压缩）时给一点额外速率，避免从 +1 慢慢穿过 0 而错过减速窗口
     const flipping = target !== 0 && lensSquash !== 0 && Math.sign(target) !== Math.sign(lensSquash);
-    const rate = Math.min(1, cfg.outputSmooth * (flipping ? cfg.flipBoost : 1));
+    const smooth = tapLensActive
+      ? (cfg.tapOutputSmooth ?? cfg.outputSmooth)
+      : cfg.outputSmooth;
+    const rate = Math.min(1, smooth * (flipping ? cfg.flipBoost : 1));
     lensSquash += (target - lensSquash) * rate;
     if (Math.abs(lensSquash) < 0.002) lensSquash = 0;
   }
 
   function lensSquashTick(now) {
-    if (!dragState) {
+    if (!dragState && !tapLensActive) {
       lensSquashRaf = 0;
       return;
     }
@@ -3111,12 +3192,21 @@ void main() {
       Math.min(64, lensSquashLastTick ? t - lensSquashLastTick : 16)
     );
     lensSquashLastTick = t;
+    // 点按过渡：用高亮块的实际位移驱动速度 / 加速度
+    if (tapLensActive && !dragState && indicator && indicator.isConnected) {
+      const fill = indicator.firstElementChild;
+      if (fill) {
+        const r = fill.getBoundingClientRect();
+        updateLensSquash(r.left + r.width / 2, t);
+        tapLensObserve(r.left, t);
+      }
+    }
     // 没有新的 pointermove = 手指停住或被挡住：速度按指数衰减，产生真实的减速
     if (t - lensSquashLastT > 16) {
       lensSquashVX *= Math.exp(-dt / cfg.stopMs);
     }
     applyLensSquashDynamics(dt);
-    if (glassActive) renderGlassCover();
+    if (glassActive && !tapLensFading) renderGlassCover();
     lensSquashRaf = requestAnimationFrame(lensSquashTick);
   }
 
@@ -3126,7 +3216,9 @@ void main() {
     lensSquashPrevVX = 0;
     lensSquashLastTick = 0;
     resetLensSquash();
-    if (!lensSquashRaf) lensSquashRaf = requestAnimationFrame(lensSquashTick);
+    // 可能还有上一步的“回弹衰减”在跑：先取消，否则主循环不会启动
+    if (lensSquashRaf) cancelAnimationFrame(lensSquashRaf);
+    lensSquashRaf = requestAnimationFrame(lensSquashTick);
   }
 
   function stopLensSquash() {
@@ -3149,6 +3241,202 @@ void main() {
     lensSquashRaf = requestAnimationFrame(decay);
   }
 
+  // ---- 点按切换 tab：高亮块滑动时临时变成玻璃 --------------------------------
+  // 点其它图标 → 高亮块开始 CSS 位移时接管成玻璃；位移停稳、形变回弹后淡回强调色。
+  let tapLensActive = false;
+  let tapLensFading = false;
+  let tapLensTargetIdx = -1;
+  let tapLensTargetAt = 0;
+  let tapLensTimer = 0;
+  let tapLensStillSince = 0;
+  let tapLensLastLeft = null;
+  let tapLensStartLeft = null;
+  let tapLensMoved = false;
+  let tapLensBounds = null;
+  // 点按玻璃比静止高亮块大多少（整体尺寸，含宽高）
+  const TAP_LENS_GROW = 0.05;
+
+  function tapLensGrowOffsets() {
+    if (!indicator) return { x: 0, y: 0 };
+    const w = indicator.offsetWidth || 0;
+    const h = indicator.offsetHeight || 0;
+    return { x: (w * TAP_LENS_GROW) / 2, y: (h * TAP_LENS_GROW) / 2 };
+  }
+
+  function beginTapLens() {
+    if (!indicator || !indicator.isConnected) return;
+    // 已经在拖着走了：交给拖动的放大逻辑
+    if (dragState && dragState.grown) return;
+    const fill = indicator.firstElementChild;
+    if (!fill) return;
+    clearTimeout(tapLensTimer);
+    tapLensActive = true;
+    tapLensFading = false;
+    tapLensStillSince = 0;
+    tapLensLastLeft = null;
+    tapLensStartLeft = null;
+    tapLensMoved = false;
+    tapLensBounds = null;
+    glassActive = true;
+    // WebGL 就绪前先用 CSS 磨砂兜底，和按住时的回退一致
+    fill.style.setProperty("background", "var(--g-dock-glass-surface)");
+    fill.style.setProperty("-webkit-backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
+    fill.style.setProperty("backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
+    // 点按时的玻璃只比静止块大 5%（不套用拖动的放大尺寸）
+    const grow = tapLensGrowOffsets();
+    fill.style.left = `-${grow.x}px`;
+    fill.style.right = `-${grow.x}px`;
+    fill.style.top = `-${grow.y}px`;
+    fill.style.bottom = `-${grow.y}px`;
+    showTapLensFlat();
+    startLensSquash();
+    // 兜底：无论动画多慢，1.6s 后一定收尾
+    tapLensTimer = setTimeout(beginTapLensFade, 1600);
+  }
+
+  // 到位并停止回弹 → 玻璃淡出、强调色块淡入
+  function beginTapLensFade() {
+    if (!tapLensActive || tapLensFading) return;
+    clearTimeout(tapLensTimer);
+    tapLensFading = true;
+    const fill = indicator && indicator.firstElementChild;
+    // 先把玻璃底下的高亮块恢复成强调色，再让画布淡出
+    if (fill) {
+      fill.style.setProperty("background", "var(--g-lens-bg)");
+      fill.style.setProperty("-webkit-backdrop-filter", "none");
+      fill.style.setProperty("backdrop-filter", "none");
+      // 缩回正常高亮块大小（和淡出同时进行）
+      fill.style.left = "0px";
+      fill.style.right = "0px";
+      fill.style.top = "0px";
+      fill.style.bottom = "0px";
+    }
+    // 画布自带 opacity 过渡（GROW_MS），交给 CSS 淡出，和松手时一致
+    if (glassCover) glassCover.style.opacity = "0";
+    if (glassShadow) glassShadow.style.opacity = "0";
+    tapLensTimer = setTimeout(finishTapLens, GROW_MS + 40);
+  }
+
+  function finishTapLens() {
+    tapLensActive = false;
+    tapLensFading = false;
+    tapLensBounds = null;
+    clearTimeout(tapLensTimer);
+    glassActive = false;
+    stopLensSquash();
+    if (glassCover) glassCover.style.opacity = "0";
+    if (glassShadow) glassShadow.style.opacity = "0";
+    const fill = indicator && indicator.firstElementChild;
+    if (fill) {
+      fill.style.setProperty("background", "var(--g-lens-bg)");
+      fill.style.setProperty("-webkit-backdrop-filter", "none");
+      fill.style.setProperty("backdrop-filter", "none");
+      fill.style.left = "0px";
+      fill.style.right = "0px";
+      fill.style.top = "0px";
+      fill.style.bottom = "0px";
+    }
+    if (glassDeferredCapture) {
+      glassDeferredCapture = false;
+      scheduleGlassCapture(0, true);
+    }
+  }
+
+  // 移交：只停掉点按模式，保留当前玻璃画面（按压 / 拖动接管）
+  function releaseTapLensTracking() {
+    tapLensActive = false;
+    tapLensFading = false;
+    clearTimeout(tapLensTimer);
+  }
+
+  // 马上放弃过渡（例如用户中途按下 dock）
+  function cancelTapLens() {
+    tapLensActive = false;
+    tapLensFading = false;
+    tapLensBounds = null;
+    clearTimeout(tapLensTimer);
+    glassActive = false;
+    if (glassCover) glassCover.style.opacity = "0";
+    if (glassShadow) glassShadow.style.opacity = "0";
+    const fill = indicator && indicator.firstElementChild;
+    if (fill) {
+      fill.style.setProperty("background", "var(--g-lens-bg)");
+      fill.style.setProperty("-webkit-backdrop-filter", "none");
+      fill.style.setProperty("backdrop-filter", "none");
+      fill.style.left = "0px";
+      fill.style.right = "0px";
+      fill.style.top = "0px";
+      fill.style.bottom = "0px";
+    }
+  }
+
+  // 每帧检查：确认真的开始移动 → 停稳 + 挤压回弹到接近 0 → 开始淡出
+  function tapLensObserve(left, t) {
+    if (!tapLensActive || tapLensFading) return;
+    if (tapLensStartLeft === null) tapLensStartLeft = left;
+    if (!tapLensMoved) {
+      if (Math.abs(left - tapLensStartLeft) > 3) {
+        tapLensMoved = true;
+      } else {
+        // 位移还没真正开始（CSS 过渡尚未推进），先别判断“停稳”
+        tapLensLastLeft = left;
+        tapLensStillSince = t;
+        return;
+      }
+    }
+    if (tapLensLastLeft === null || Math.abs(left - tapLensLastLeft) > 0.5) {
+      tapLensLastLeft = left;
+      tapLensStillSince = t;
+      return;
+    }
+    if (!tapLensStillSince) tapLensStillSince = t;
+    // 形变已经很轻微（视觉上基本回正）就收尾，不必等绝对值归零
+    if (t - tapLensStillSince > 90 && Math.abs(lensSquash) < 0.12) {
+      beginTapLensFade();
+    }
+  }
+
+  // 每帧都要用的主题值：缓存几秒，避免每帧多次 getComputedStyle
+  let glassTintCacheLight = null;
+  let glassTintCacheAt = 0;
+  let glassTintCacheValue = null;
+
+  function glassTintColor(root) {
+    const light = root.hasAttribute("glass-light");
+    const now = performance.now();
+    if (
+      glassTintCacheValue &&
+      glassTintCacheLight === light &&
+      now - glassTintCacheAt < 3000
+    ) {
+      return glassTintCacheValue;
+    }
+    const tint = root.shadowRoot.querySelector(".glass-tint");
+    const css = tint
+      ? getComputedStyle(tint).color
+      : getComputedStyle(root).getPropertyValue("--g-icon-active");
+    glassTintCacheValue = parseStatusColor(css) || { r: 0, g: 154, b: 199 };
+    glassTintCacheLight = light;
+    glassTintCacheAt = now;
+    return glassTintCacheValue;
+  }
+
+  let glassOuterCacheLight = null;
+  let glassOuterCacheValue = "";
+
+  function glassOuterShadow(root) {
+    const light = root.hasAttribute("glass-light");
+    if (glassOuterCacheLight === light && glassOuterCacheValue) {
+      return glassOuterCacheValue;
+    }
+    const outer = getComputedStyle(root).getPropertyValue("--g-dock-outer").trim();
+    glassOuterCacheValue = outer
+      ? `${outer}, 0 6px 16px -6px rgba(0,0,0,.16)`
+      : "0 10px 24px -8px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.08)";
+    glassOuterCacheLight = light;
+    return glassOuterCacheValue;
+  }
+
   function renderGlassCover() {
     if (!glassActive || !glassCover || !glassRenderer || !glassTexture) return;
     const { root, vc, tg } = getGlassParts();
@@ -3157,9 +3445,14 @@ void main() {
     // 遮罩打开期间如果页面已经切换（例如拖动切页），旧纹理属于上一页，
     // 继续绘制会露出旧页面内容：改成“页面底色占位”的玻璃，并重新抓拍。
     if (glassTextureKey && getGlassKey(root, vc) !== glassTextureKey) {
-      showGlassPlaceholder();
       scheduleGlassCapture(0, true);
-      return;
+      if (!tapLensActive) {
+        // 按住 / 拖动时页面已经换了：退回页面底色占位，避免长时间显示别的页面
+        showGlassPlaceholder();
+        return;
+      }
+      // 点按过渡只有 ~0.5s：继续画上一帧，别让玻璃在滑动中途消失；
+      // 新快照落地后 captureGlassBackground 会自动替换纹理。
     }
     const r = fill.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) return;
@@ -3171,17 +3464,24 @@ void main() {
     const { s, sx, sy, maxY } = lensSquashFactors();
     const dockRect = tg ? tg.getBoundingClientRect() : null;
     // 拉伸边界 = 遮罩停在最左/最右 tab 时的左右边缘（含按住放大的外扩量）
-    const tabsForBounds = tg ? dockTabs(tg) : [];
+    // 点按过渡期间底栏不会动：算一次缓存起来，省掉每帧多次 rect 读取。
     let boundLeft;
     let boundRight;
-    if (tabsForBounds.length) {
-      const firstTab = tabsForBounds[0].getBoundingClientRect();
-      const lastTab = tabsForBounds[tabsForBounds.length - 1].getBoundingClientRect();
-      boundLeft = firstTab.left - GROW_W;
-      boundRight = lastTab.right + GROW_W;
+    if (tapLensActive && tapLensBounds) {
+      boundLeft = tapLensBounds.left;
+      boundRight = tapLensBounds.right;
     } else {
-      boundLeft = dockRect ? dockRect.left : r.left;
-      boundRight = dockRect ? dockRect.right : r.left + r.width;
+      const tabsForBounds = tg ? dockTabs(tg) : [];
+      if (tabsForBounds.length) {
+        const firstTab = tabsForBounds[0].getBoundingClientRect();
+        const lastTab = tabsForBounds[tabsForBounds.length - 1].getBoundingClientRect();
+        boundLeft = firstTab.left - GROW_W;
+        boundRight = lastTab.right + GROW_W;
+      } else {
+        boundLeft = dockRect ? dockRect.left : r.left;
+        boundRight = dockRect ? dockRect.right : r.left + r.width;
+      }
+      if (tapLensActive) tapLensBounds = { left: boundLeft, right: boundRight };
     }
     // 横向：形变中心 = 运动方向的前沿（左移用左边缘，右移用右边缘），
     // 长度变化全部由另一侧承担；方向翻转时用当前胶囊边界重新起步，避免跳位。
@@ -3232,7 +3532,8 @@ void main() {
     const canvasLeft = boundLeft;
     const canvasW = boundRight - boundLeft;
     const canvasTop = r.top - marginY;
-    const canvasH = r.height + marginY * 2;
+    // 高度量化到 8px 网格：点按放大只让 r 变化几 px，避免每帧重建绘制缓冲
+    const canvasH = Math.ceil((r.height + marginY * 2) / 8) * 8;
     glassCover.style.left = `${canvasLeft}px`;
     glassCover.style.top = `${canvasTop}px`;
     glassCover.style.width = `${canvasW}px`;
@@ -3247,25 +3548,22 @@ void main() {
       const rx = Math.max(0, Math.min(baseR * (lensW / r.width), lensW / 2));
       const ry = Math.max(0, Math.min(baseR * (lensH / r.height), lensH / 2));
       glassShadow.style.borderRadius = `${rx}px / ${ry}px`;
-      const outer = getComputedStyle(root).getPropertyValue("--g-dock-outer").trim();
-      const shadowCss = outer
-        ? `${outer}, 0 6px 16px -6px rgba(0,0,0,.16)`
-        : "0 10px 24px -8px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.08)";
+      const outer = glassOuterShadow(root);
+      const shadowCss = outer;
       if (glassShadow.style.boxShadow !== shadowCss) {
         glassShadow.style.boxShadow = shadowCss;
       }
     }
     // The shader supplies a smooth SDF edge; CSS clipping here would alias it twice.
     glassCover.style.borderRadius = "0px";
-    const mobile = window.innerWidth <= 700 || window.matchMedia("(pointer: coarse)").matches;
-    const dpr = glassRenderScale();
+    const mobile = window.innerWidth <= 700 || GLASS_COARSE_POINTER;
+    // 点按过渡期间降一档分辨率：手机 DPR 3 下像素量直接降到 ~2.25 分之一
+    const dpr = tapLensActive
+      ? Math.min(2, glassRenderScale())
+      : glassRenderScale();
     // r 角用“静止时”的半径（px），形变只拉伸/收缩边，不改变圆角大小
     const radius = Math.min(r.width, r.height) / 2;
-    const tint = root.shadowRoot.querySelector(".glass-tint");
-    const tintCssColor = tint
-      ? getComputedStyle(tint).color
-      : getComputedStyle(root).getPropertyValue("--g-icon-active");
-    const tintColor = parseStatusColor(tintCssColor) || { r: 0, g: 154, b: 199 };
+    const tintColor = glassTintColor(root);
     // 边框在 shader 里按 SDF 描边；颜色沿用底栏边框的上下两端（明亮 90%）。
     const light = root.hasAttribute("glass-light");
     const rim = light
@@ -3324,6 +3622,8 @@ void main() {
   }
 
   function revealGlassCover() {
+    // 淡出回强调色的过程中，迟到的抓拍不能把画布又亮回来
+    if (tapLensFading) return;
     if (!glassActive || !glassTexture || !glassCover || !glassRenderer) return;
     const fill = indicator && indicator.firstElementChild;
     if (!fill) return;
@@ -3424,6 +3724,71 @@ void main() {
     glassForceCapture = true;
     revealGlassCover();
   }
+  // 点按过渡专用：遮罩里不放页面截图，只铺两块纯色
+  //   · 底栏范围 → 底栏玻璃底色
+  //   · 其余位置 → 页面底色
+  function showTapLensFlat() {
+    if (!ensureGlassRenderer() || !glassCover) return;
+    const { root, tg, vc, tabsEl } = getGlassParts();
+    if (!root || !tg || !vc) return;
+    const vcRect = vc.getBoundingClientRect();
+    const tgRect = tg.getBoundingClientRect();
+    if (vcRect.width < 4 || vcRect.height < 4 || tgRect.width < 4) return;
+    const light = root.hasAttribute("glass-light");
+    const scale = glassScale || 1;
+    const radius =
+      (parseFloat(getComputedStyle(root).getPropertyValue("--g-dock-radius")) || 30) * scale;
+    const shellLayer = buildDockShellLayer(tgRect, scale, radius, light);
+    if (!shellLayer) return;
+    // 半分辨率就够了：只有两块纯色
+    const w = Math.max(2, Math.round(vcRect.width / 2));
+    const h = Math.max(2, Math.round((w * vcRect.height) / vcRect.width));
+    const flat = document.createElement("canvas");
+    flat.width = w;
+    flat.height = h;
+    const fctx = flat.getContext("2d");
+    fctx.fillStyle = glassPlaceholderColor(root, vc);
+    fctx.fillRect(0, 0, w, h);
+    const dockColor = getComputedStyle(root)
+      .getPropertyValue("--g-dock-glass-surface")
+      .trim();
+    if (dockColor) {
+      const kx = w / vcRect.width;
+      const ky = h / vcRect.height;
+      const x = (tgRect.left - vcRect.left) * kx;
+      const y = (tgRect.top - vcRect.top) * ky;
+      const rw = tgRect.width * kx;
+      const rh = tgRect.height * ky;
+      fctx.save();
+      roundRectPath(fctx, x, y, rw, rh, Math.min(rw, rh) / 2);
+      fctx.fillStyle = dockColor;
+      fctx.fill();
+      fctx.restore();
+    }
+    glassRenderer.setImage(flat);
+    glassRenderer.setShell(shellLayer.canvas);
+    glassShellCanvas = shellLayer.canvas;
+    if (glassLastOverlay) glassRenderer.setOverlay(glassLastOverlay);
+    glassTexture = flat;
+    glassTextureKey = getGlassKey(root, vc);
+    glassRootRect = vcRect;
+    glassDockShellRect = shellLayer.rect;
+    if (!glassOverlayRect && tabsEl) {
+      const tabsRect = tabsEl.getBoundingClientRect();
+      if (tabsRect.width > 1) {
+        glassOverlayRect = {
+          left: tabsRect.left,
+          top: tabsRect.top,
+          width: tabsRect.width,
+          height: tabsRect.height,
+        };
+      }
+    }
+    // 过渡结束后再用真实快照替换
+    glassDirty = true;
+    glassForceCapture = true;
+    revealGlassCover();
+  }
 
   function initGlassCover() {
     if (!ensureGlassRenderer()) return;
@@ -3492,6 +3857,8 @@ void main() {
     const fill = indicator.firstElementChild;
     if (!fill) return;
     if (on) {
+      // 放大接管玻璃：点按过渡从此交给按压 / 拖动逻辑
+      releaseTapLensTracking();
       glassActive = true;
       // Instant CSS fallback while a newly navigated page's texture is warming.
       // The WebGL cover replaces this as soon as a complete scene is ready.
@@ -3499,6 +3866,10 @@ void main() {
       fill.style.setProperty("-webkit-backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
       fill.style.setProperty("backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
       initGlassCover();
+    } else if (tapLensActive) {
+      // 点按玻璃还在滑：保留画布和玻璃填充，只把放大的偏移收回
+      clearTimeout(glassOverlayRefreshTimer);
+      glassOverlayRefreshTimer = 0;
     } else {
       glassActive = false;
       clearTimeout(glassOverlayRefreshTimer);
@@ -3514,10 +3885,14 @@ void main() {
     }
     const dx = on ? `-${GROW_W}px` : "0px";
     const dy = on ? `-${GROW_H_OFF}px` : "0px";
-    if (fill.style.left !== dx) fill.style.left = dx;
-    if (fill.style.right !== dx) fill.style.right = dx;
-    if (fill.style.top !== dy) fill.style.top = dy;
-    if (fill.style.bottom !== dy) fill.style.bottom = dy;
+    // 点按玻璃接管期间保持放大状态，不要在这里缩回
+    const writeOffsets = on || !tapLensActive;
+    if (writeOffsets) {
+      if (fill.style.left !== dx) fill.style.left = dx;
+      if (fill.style.right !== dx) fill.style.right = dx;
+      if (fill.style.top !== dy) fill.style.top = dy;
+      if (fill.style.bottom !== dy) fill.style.bottom = dy;
+    }
     if (tabs && tabs.length) trackHover(tabs, reduceMotion ? 0 : GROW_MS + 120);
   }
 
@@ -3607,7 +3982,7 @@ void main() {
     const step = () => {
       if (!tabs[0] || !tabs[0].isConnected) return;
       syncTint(tabs);
-      if (glassActive) renderGlassCover();
+      if (glassActive && !tapLensActive) renderGlassCover();
       if (performance.now() < deadline) hoverRaf = requestAnimationFrame(step);
     };
     hoverRaf = requestAnimationFrame(step);
@@ -3640,6 +4015,24 @@ void main() {
     };
 
     // 图标颜色由模块级的 syncTint / trackHover 统一负责
+
+    // 点按某个 tab：记下目标格。HA 有时要等视图渲染完才更新 tab 状态，
+    // 所以不用固定时间窗，等它真正切到这一格时再接管成玻璃。
+    tg.addEventListener(
+      "click",
+      (ev) => {
+        const tab = (ev.composedPath() || []).find(
+          (n) => n && n.tagName === "HA-TAB-GROUP-TAB"
+        );
+        if (!tab) return;
+        const idx = dockTabs(tg).indexOf(tab);
+        if (idx >= 0) {
+          tapLensTargetIdx = idx;
+          tapLensTargetAt = performance.now();
+        }
+      },
+      true
+    );
 
     // 手指停在某一格超过 200ms 就切过去（拖动过程中也生效）
     const armDwell = (state, idx) => {
@@ -3690,11 +4083,15 @@ void main() {
         };
         dragState = state;
         tg.classList.add("glass-dragging");
+        // 如果上一次点按的玻璃过渡还在，立即交还给按压逻辑
+        cancelTapLens();
         startLensSquash();
 
         // 按住一小会儿（或开始横向拖动）就把高亮块放大，松手缩回
         state.growTimer = setTimeout(() => {
           if (dragState !== state) return;
+          // 点按切页的玻璃保持 +5% 小尺寸，别被长按放大盖掉
+          if (tapLensActive) return;
           state.grown = true;
           setLensGrow(state.tabs, true);
           if (!state.hapticFired && state.pointerType !== "mouse") {
@@ -3708,6 +4105,8 @@ void main() {
         if (pressedIdx !== -1 && pressedIdx !== cur) {
           indicator.style.transition = IND_TRANSITION;
           indicator.style.transform = `translate(${pressedTab.offsetLeft}px, ${pressedTab.offsetTop}px)`;
+          // 高亮块一开始移动就接管成玻璃（拖动 / 长按会随后接手）
+          beginTapLens();
           state.settleTimer = setTimeout(
             () => {
               state.settled = true;
@@ -3775,7 +4174,8 @@ void main() {
       const state = dragState;
       dragState = null;
       tg.classList.remove("glass-dragging");
-      stopLensSquash();
+      // 点按玻璃的循环还要继续跑（负责跟随位移和收尾），不能在这里停掉
+      if (!tapLensActive) stopLensSquash();
       clearTimeout(state.settleTimer);
       clearTimeout(state.dwellTimer);
       clearTimeout(state.growTimer);
@@ -3788,6 +4188,9 @@ void main() {
           : Math.round((x - m.pad) / m.cellW);
       const idx = Math.max(0, Math.min(state.tabs.length - 1, releaseIdx));
       const target = state.tabs[idx];
+      const prevActiveIdx = state.tabs.findIndex((t) =>
+        t.hasAttribute("data-glass-active")
+      );
 
       // 松手：高亮块缩回原大小 + 吸到最近一格，两个动画同时跑
       setLensGrow(state.tabs, false);
@@ -3797,6 +4200,11 @@ void main() {
       const moved =
         Math.abs(ev.clientX - state.startX) > 4 ||
         Math.abs(ev.clientY - state.startY) > 4;
+      // 点按别的图标（不是拖动）：吸附位移期间把高亮块接管成玻璃
+      if (!moved && idx !== prevActiveIdx && !tapLensActive) {
+        tapLensTargetIdx = -1;
+        beginTapLens();
+      }
       if (moved) {
         // Don't let HA's synthesized click select the original press target.
         suppressDockClickUntil = Date.now() + 600;
@@ -4207,6 +4615,7 @@ void main() {
       indicator.style.width = `${w}px`;
       indicator.style.height = `${h}px`;
       indicator.style.transform = `translate(${x}px, ${y}px)`;
+      indicator.dataset.glassIdx = String(idx);
 
       const fill = document.createElement("div");
       fill.className = "glass-indicator-fill";
@@ -4245,7 +4654,21 @@ void main() {
     indicator.style.width = widthStyle;
     indicator.style.height = heightStyle;
     indicator.style.borderRadius = radius;
-    if (positionChanged) indicator.style.transform = transformStyle;
+    if (positionChanged) {
+      const prevIdx =
+        indicator.dataset.glassIdx === undefined
+          ? idx
+          : Number(indicator.dataset.glassIdx);
+      // 点按了别的图标：先让位移开始，再把高亮块接管成玻璃
+      const tapped =
+        idx !== prevIdx &&
+        idx === tapLensTargetIdx &&
+        performance.now() - tapLensTargetAt < 2500;
+      if (tapped) tapLensTargetIdx = -1;
+      indicator.style.transform = transformStyle;
+      if (tapped) beginTapLens();
+    }
+    indicator.dataset.glassIdx = String(idx);
     if (performance.now() < pageTintUntil) return;
     // A page switch can trigger several refreshes while HA renders the view.
     // Restart tint tracking only for a real indicator move/resize, not each pass.
@@ -4374,19 +4797,79 @@ void main() {
   let glassActionsCapsule = null;
   let glassActionsSig = "";
   let glassActionsHost = null;
+  let glassActionsObserver = null;
+  let glassActionsObservedHost = null;
+  let glassActionsSyncQueued = false;
 
   let glassActionsAnchor = null;
+  // 被我们搬进过胶囊的节点（下拉菜单 / 按钮）。HA 重建后会出现一份不带标记的新节点，
+  // 去重时优先保留它、丢掉我们的旧副本。
+  const glassActionsOwned = new WeakSet();
+  const glassActionsIsOwned = (node) => glassActionsOwned.has(node);
+
+  function glassActionsDedupe(nodes) {
+    if (nodes.length <= 1) return nodes[0] || null;
+    const keep = nodes.find((n) => !glassActionsIsOwned(n)) || nodes[nodes.length - 1];
+    nodes.forEach((node) => {
+      if (node !== keep) node.remove();
+    });
+    return keep;
+  }
+
+  function glassActionsDedupeButtons(host) {
+    if (!host) return;
+    const byId = new Map();
+    [...host.children].forEach((node) => {
+      if (!node.id) return;
+      const list = byId.get(node.id);
+      if (list) list.push(node);
+      else byId.set(node.id, [node]);
+    });
+    byId.forEach((list) => {
+      if (list.length > 1) glassActionsDedupe(list);
+    });
+  }
 
   function syncActionsCapsule(root, toolbar) {
     const host = toolbar && toolbar.querySelector(".action-items");
-    const dd = host && host.querySelector("ha-dropdown");
+    // HA 重建动作按钮 / 下拉菜单时立刻去重，不等 500ms 轮询：
+    // 否则切换宽窄的那一小段时间里会同时看到两个 ⋮。
+    if (host && glassActionsObservedHost !== host) {
+      if (glassActionsObserver) glassActionsObserver.disconnect();
+      glassActionsObservedHost = host;
+      glassActionsObserver = new MutationObserver(() => {
+        if (glassActionsSyncQueued) return;
+        glassActionsSyncQueued = true;
+        requestAnimationFrame(() => {
+          glassActionsSyncQueued = false;
+          safeRefresh();
+        });
+      });
+      glassActionsObserver.observe(host, { childList: true });
+    }
+    const isDropdown = (node) => node && node.tagName === "HA-DROPDOWN";
+    // HA 在 PC / 移动端切换时会重建下拉菜单（触发按钮 id 在 button-0 / dashboardmenu
+    // 之间变化），旧节点可能已经被我们还回 .action-items，之后 HA 又新建一个。
+    // 两处合起来去重：只要有不止一个下拉菜单，就保留 HA 新建的那份、销毁旧副本。
+    const allDds = [
+      ...(glassActionsCapsule
+        ? [...glassActionsCapsule.children].filter(isDropdown)
+        : []),
+      ...(host ? [...host.children].filter(isDropdown) : []),
+    ];
+    const dd = glassActionsDedupe(allDds);
+    // 按钮同理：同一个 id 只留一个，HA 新建的优先
+    glassActionsDedupeButtons(host);
     const wide = window.matchMedia("(min-width: 871px)").matches;
     const enabled = wide && !!dd && !!root && root.hasAttribute("glass-on");
     if (!enabled) {
       if (glassActionsCapsule) {
         // 还原：把原生控件放回 action-items，胶囊隐藏
-        [...glassActionsCapsule.children].forEach((node) => host && host.appendChild(node));
+        [...glassActionsCapsule.children].forEach((node) => {
+          if (host) host.appendChild(node);
+        });
         glassActionsCapsule.style.display = "none";
+        glassActionsDedupeButtons(host);
       }
       if (glassActionsHost) glassActionsHost.classList.remove("glass-actions-on");
       glassActionsAnchor = null;
@@ -4455,6 +4938,7 @@ void main() {
     });
     controls.forEach((node) => {
       if (node.parentElement !== el) el.appendChild(node);
+      glassActionsOwned.add(node);
     });
     const anchor = glassActionsAnchor;
     if (!anchor) return;
