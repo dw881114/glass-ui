@@ -82,6 +82,10 @@
     overflowMenuOffset: "auto", // 菜单相对圆钮的垂直偏移："auto" = 直接盖住圆钮；数字 = px（正数往下）
     overflowMenuEdge: 10, // ⋮ 弹出菜单距视口边缘（顶 / 右等）的安全距离
 
+    // 抓拍时额外忽略的元素（CSS 选择器）。摄像头卡片 / 视频流默认已忽略，
+    // 这里可以补充自定义卡片，例如 [".my-camera-card", "hui-iframe-card"]。
+    captureIgnore: [],
+
   };
 
   // 覆盖配置的两种方式（都不用改这个文件，HACS 升级时也不会丢）：
@@ -1859,8 +1863,6 @@ ${P} hui-view-container {
   let dragState = null;
   let snapUntil = 0;
   let hoverRaf = 0;
-  let pageTintUntil = 0;
-  let pageTintTimer = 0;
   let suppressSwipeClick = null;
   let suppressDockClickUntil = 0;
   window.addEventListener(
@@ -2479,6 +2481,8 @@ void main() {
   let glassShadow = null;
   let glassRenderer = null;
   let glassTexture = null;
+  // 点按过渡用的纯色纹理（与真实快照区分开）
+  let glassFlatTexture = null;
   let glassActive = false;
   let glassBusy = false;
   let glassOverlayBusy = false;
@@ -2487,6 +2491,7 @@ void main() {
   let glassOverlayRefreshTimer = 0;
   let glassDirty = true;
   let glassDeferredCapture = false;
+  let glassHiResTimer = 0;
   let glassWarmupTimer = 0;
   let glassCaptureTimer = 0;
   let glassCaptureRevision = 0;
@@ -2504,7 +2509,7 @@ void main() {
   let glassViewResize = null;
   let glassViewSeen = new WeakSet();
   let glassViewObservedCount = 0;
-  const GLASS_VIEW_QUIET_MS = 260;
+  const GLASS_VIEW_QUIET_MS = 150;
   const GLASS_VIEW_MAX_NODES = 4000;
   // 拖动时按横向加速度做挤压 / 拉伸（预设参数，后续可调）
   const GLASS_DRAG_SQUASH = {
@@ -2696,7 +2701,7 @@ void main() {
 
   // Snapshot the actual HA view without the dock. Compose the blurred dock plate
   // and an independently sampled tab foreground, exactly like the test page.
-  async function captureGlassBackground() {
+  async function captureGlassBackground(quality = 1) {
     if (glassBusy || !ensureGlassRenderer()) return;
     // 点按过渡只有 ~1s：这期间不跑 snapdom（它会阻塞主线程），
     // 玻璃继续用上一帧，动画结束后再补拍。
@@ -2729,7 +2734,13 @@ void main() {
         return;
       }
       const light = root.hasAttribute("glass-light");
-      const captured = await snap.toCanvas(vc, { scale: 1 });
+      // quality 1 = 先出一张 1× 的快速版；quality 2 = 按设备 DPR 出清晰版
+      const dprNow = Math.max(1, window.devicePixelRatio || 1);
+      const snapScale = quality >= 2 ? 1 : 1 / dprNow;
+      const captured = await snap.toCanvas(vc, {
+        scale: snapScale,
+        exclude: glassIgnoreSelectors(),
+      });
       if (captureRevision !== glassCaptureRevision) {
         glassDirty = true;
         glassForceCapture = true;
@@ -2752,21 +2763,45 @@ void main() {
         return;
       }
 
+      // 只保留底栏周围的条带：镜片只会采样这一块，整页纹理纯属浪费。
+      // 横向多留 16px、纵向多留 24px，覆盖拉伸 / 回弹时的溢出。
+      const marginX = 16;
+      const marginY = 24;
+      const stripLeft = Math.max(rootRect.left, tgRect.left - marginX);
+      const stripTop = Math.max(rootRect.top, tgRect.top - marginY);
+      const stripRight = Math.min(rootRect.right, tgRect.right + marginX);
+      const stripBottom = Math.min(rootRect.bottom, tgRect.bottom + marginY);
+      const stripW = Math.max(1, stripRight - stripLeft);
+      const stripH = Math.max(1, stripBottom - stripTop);
+
+      // captured 与 CSS px 的实际比例（可能受设备 DPR 影响）
+      const capScale = captured.width / Math.max(1, rootRect.width);
       // Normalize the snapshot itself to the capped sampling scale. Keeping the
       // original DPR-3 bitmap while clamping glassScale to 2 misplaces the dock
       // shell and foreground by one third on Android devices with DPR 3+.
-      glassScale = Math.min(2, Math.max(1, captured.width / Math.max(1, rootRect.width)));
+      glassScale = Math.min(2, Math.max(1, capScale));
       const tex = document.createElement("canvas");
-      tex.width = Math.max(1, Math.round(rootRect.width * glassScale));
-      tex.height = Math.max(1, Math.round(rootRect.height * glassScale));
+      tex.width = Math.max(1, Math.round(stripW * glassScale));
+      tex.height = Math.max(1, Math.round(stripH * glassScale));
       const ctx = tex.getContext("2d");
       ctx.fillStyle = light ? "#eef0f4" : "#101114";
       ctx.fillRect(0, 0, tex.width, tex.height);
-      ctx.drawImage(captured, 0, 0, captured.width, captured.height, 0, 0, tex.width, tex.height);
+      // 从整页截图里裁出底栏条带
+      ctx.drawImage(
+        captured,
+        (stripLeft - rootRect.left) * capScale,
+        (stripTop - rootRect.top) * capScale,
+        Math.max(1, stripW * capScale),
+        Math.max(1, stripH * capScale),
+        0,
+        0,
+        tex.width,
+        tex.height
+      );
 
       const dr = tgRect;
-      const rx = (dr.left - rootRect.left) * glassScale;
-      const ry = (dr.top - rootRect.top) * glassScale;
+      const rx = (dr.left - stripLeft) * glassScale;
+      const ry = (dr.top - stripTop) * glassScale;
       const rw = dr.width * glassScale;
       const rh = dr.height * glassScale;
       const radius = (parseFloat(getComputedStyle(root).getPropertyValue("--g-dock-radius")) || 30) * glassScale;
@@ -2860,12 +2895,32 @@ void main() {
       glassRenderer.setShell(shellLayer.canvas);
       glassShellCanvas = shellLayer.canvas;
       // Keep the sampling origin paired with the texture actually bound to GL.
-      glassRootRect = rootRect;
+      // Keep the sampling origin paired with the texture actually bound to GL.
+      glassRootRect = {
+        left: stripLeft,
+        top: stripTop,
+        width: stripW,
+        height: stripH,
+      };
       glassDockShellRect = shellLayer.rect;
       glassDirty = false;
       glassForceCapture = false;
       glassLastCaptureAt = performance.now();
       if (glassActive) revealGlassCover();
+      // 先出 1× 快速版；高分屏空闲时再补一张 2× 清晰版
+      if (
+        quality === 1 &&
+        glassRenderScale() > 1.4 &&
+        !tapLensActive &&
+        !glassHiResTimer
+      ) {
+        glassHiResTimer = setTimeout(() => {
+          glassHiResTimer = 0;
+          if (!tapLensActive && !dragState && !glassDirty) {
+            captureGlassBackground(2);
+          }
+        }, 1000);
+      }
     } catch (err) {
       console.warn("[glass-ui] texture capture failed; keeping accent highlight", err);
     } finally {
@@ -2998,7 +3053,6 @@ void main() {
 
   function scheduleGlassCapture(delay = 100, force = false) {
     glassDirty = true;
-    glassCaptureRevision++;
     if (force) glassForceCapture = true;
     // 点按玻璃动画期间不排队抓拍：snapdom 会卡住主线程，等过渡结束再补。
     if (tapLensActive) {
@@ -3009,13 +3063,7 @@ void main() {
     }
     clearTimeout(glassCaptureTimer);
     glassCaptureTimer = setTimeout(() => {
-      // 拖动遮罩本身不会改变页面内容，拖动期间不抓背景；
-      // 标记为脏，松手后再补一张。
-      if (dragState) {
-        glassDirty = true;
-        glassForceCapture = true;
-        return;
-      }
+      // 手指在底栏上也可以抓拍；只有点按动画期间才推迟
       if (glassActive || glassForceCapture) captureGlassBackground();
     }, delay);
   }
@@ -3044,9 +3092,46 @@ void main() {
     }, GLASS_VIEW_QUIET_MS);
   }
 
+  // 截图时忽略的元素：摄像头卡片 / 视频流默认排除，
+  // 既不把实时画面拍进快照，也不让它的频繁刷新触发重拍。
+  // 自定义卡片可以在配置里用 captureIgnore 追加选择器。
+  const GLASS_CAPTURE_IGNORE = [
+    "hui-camera-card",
+    "ha-camera-card",
+    "ha-camera-stream",
+    "video",
+    "iframe",
+    '[data-capture="exclude"]',
+  ];
+
+  function glassIgnoreSelectors() {
+    const extra =
+      CONFIG && Array.isArray(CONFIG.captureIgnore) ? CONFIG.captureIgnore : [];
+    return extra.length ? GLASS_CAPTURE_IGNORE.concat(extra) : GLASS_CAPTURE_IGNORE;
+  }
+
+  function glassNodeIgnored(node) {
+    const selector = glassIgnoreSelectors().join(",");
+    let el = node && (node.nodeType === 1 ? node : node.parentElement);
+    while (el) {
+      const tag = el.tagName ? el.tagName.toLowerCase() : "";
+      if (tag.indexOf("camera") !== -1) return true;
+      if (el.matches && el.matches(selector)) return true;
+      const root = el.getRootNode ? el.getRootNode() : null;
+      el = root && root.host ? root.host : el.parentElement;
+    }
+    return false;
+  }
+
+  function glassRecordRelevant(record) {
+    return !glassNodeIgnored(record.target);
+  }
+
   function scanGlassView(node) {
     if (!node || node.nodeType !== 1 || glassViewSeen.has(node)) return;
     if (glassViewObservedCount > GLASS_VIEW_MAX_NODES) return;
+    // 摄像头卡片内部的变化不参与快照刷新
+    if (glassNodeIgnored(node)) return;
     glassViewSeen.add(node);
     glassViewObservedCount++;
     if (glassViewResize) glassViewResize.observe(node);
@@ -3054,10 +3139,11 @@ void main() {
     if (sr && !glassViewSeen.has(sr)) {
       glassViewSeen.add(sr);
       const mo = new MutationObserver((records) => {
-        for (const record of records) {
+        const relevant = records.filter(glassRecordRelevant);
+        for (const record of relevant) {
           record.addedNodes.forEach(scanGlassView);
         }
-        glassViewChanged();
+        if (relevant.length) glassViewChanged();
       });
       mo.observe(sr, { childList: true, subtree: true, characterData: true });
       glassViewMutations.push(mo);
@@ -3081,12 +3167,17 @@ void main() {
     if (!vc || vc === glassObservedView) return;
     teardownGlassViewObserver();
     glassObservedView = vc;
-    glassViewResize = new ResizeObserver(() => glassViewChanged());
+    glassViewResize = new ResizeObserver((entries) => {
+      // 只忽略摄像头控件自身的尺寸变化
+      if (entries.every((entry) => glassNodeIgnored(entry.target))) return;
+      glassViewChanged();
+    });
     const rootMo = new MutationObserver((records) => {
-      for (const record of records) {
+      const relevant = records.filter(glassRecordRelevant);
+      for (const record of relevant) {
         record.addedNodes.forEach(scanGlassView);
       }
-      glassViewChanged();
+      if (relevant.length) glassViewChanged();
     });
     rootMo.observe(vc, { childList: true, subtree: true, characterData: true });
     glassViewMutations.push(rootMo);
@@ -3253,6 +3344,9 @@ void main() {
   let tapLensStartLeft = null;
   let tapLensMoved = false;
   let tapLensBounds = null;
+  let tapLensParts = null;
+  // 点按开始前缓存下来的真实快照（长按放大时直接复用）
+  let tapLensSaved = null;
   // 点按玻璃比静止高亮块大多少（整体尺寸，含宽高）
   const TAP_LENS_GROW = 0.05;
 
@@ -3279,7 +3373,7 @@ void main() {
     tapLensBounds = null;
     glassActive = true;
     // WebGL 就绪前先用 CSS 磨砂兜底，和按住时的回退一致
-    fill.style.setProperty("background", "var(--g-dock-glass-surface)");
+    fill.style.setProperty("background", "transparent");
     fill.style.setProperty("-webkit-backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
     fill.style.setProperty("backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
     // 点按时的玻璃只比静止块大 5%（不套用拖动的放大尺寸）
@@ -3289,6 +3383,7 @@ void main() {
     fill.style.top = `-${grow.y}px`;
     fill.style.bottom = `-${grow.y}px`;
     showTapLensFlat();
+    tapLensParts = getGlassParts();
     startLensSquash();
     // 兜底：无论动画多慢，1.6s 后一定收尾
     tapLensTimer = setTimeout(beginTapLensFade, 1600);
@@ -3321,6 +3416,7 @@ void main() {
     tapLensActive = false;
     tapLensFading = false;
     tapLensBounds = null;
+    tapLensParts = null;
     clearTimeout(tapLensTimer);
     glassActive = false;
     stopLensSquash();
@@ -3338,6 +3434,7 @@ void main() {
     }
     if (glassDeferredCapture) {
       glassDeferredCapture = false;
+      // 过渡一结束就补拍（手指在底栏上也允许）
       scheduleGlassCapture(0, true);
     }
   }
@@ -3354,6 +3451,7 @@ void main() {
     tapLensActive = false;
     tapLensFading = false;
     tapLensBounds = null;
+    tapLensParts = null;
     clearTimeout(tapLensTimer);
     glassActive = false;
     if (glassCover) glassCover.style.opacity = "0";
@@ -3437,22 +3535,62 @@ void main() {
     return glassOuterCacheValue;
   }
 
+  let glassFilterCacheLight = null;
+  let glassFilterCacheAt = 0;
+  let glassFilterCacheValue = "";
+
+  function glassDockFilterValue(root) {
+    const light = root.hasAttribute("glass-light");
+    const now = performance.now();
+    if (
+      glassFilterCacheValue &&
+      glassFilterCacheLight === light &&
+      now - glassFilterCacheAt < 3000
+    ) {
+      return glassFilterCacheValue;
+    }
+    glassFilterCacheValue = (
+      getComputedStyle(root).getPropertyValue("--g-dock-filter").trim() || ""
+    );
+    glassFilterCacheLight = light;
+    glassFilterCacheAt = now;
+    return glassFilterCacheValue;
+  }
+
   function renderGlassCover() {
     if (!glassActive || !glassCover || !glassRenderer || !glassTexture) return;
-    const { root, vc, tg } = getGlassParts();
+    // 点按过渡期间缓存 DOM 节点，别每帧都重新遍历 shadow root
+    let root;
+    let vc;
+    let tg;
+    if (
+      tapLensActive &&
+      tapLensParts &&
+      tapLensParts.root &&
+      tapLensParts.root.isConnected &&
+      tapLensParts.vc &&
+      tapLensParts.vc.isConnected &&
+      tapLensParts.tg &&
+      tapLensParts.tg.isConnected
+    ) {
+      root = tapLensParts.root;
+      vc = tapLensParts.vc;
+      tg = tapLensParts.tg;
+    } else {
+      ({ root, vc, tg } = getGlassParts());
+      if (tapLensActive) tapLensParts = { root, vc, tg };
+    }
     const fill = indicator && indicator.firstElementChild;
     if (!root || !vc || !fill || !glassOverlayRect || !glassDockShellRect) return;
     // 遮罩打开期间如果页面已经切换（例如拖动切页），旧纹理属于上一页，
     // 继续绘制会露出旧页面内容：改成“页面底色占位”的玻璃，并重新抓拍。
-    if (glassTextureKey && getGlassKey(root, vc) !== glassTextureKey) {
+    // 点按过渡本来就不使用截图纹理，跳过这层判断（也省掉每帧的 getBoundingClientRect）。
+    if (!tapLensActive && glassTextureKey && getGlassKey(root, vc) !== glassTextureKey) {
       scheduleGlassCapture(0, true);
-      if (!tapLensActive) {
-        // 按住 / 拖动时页面已经换了：退回页面底色占位，避免长时间显示别的页面
-        showGlassPlaceholder();
-        return;
-      }
-      // 点按过渡只有 ~0.5s：继续画上一帧，别让玻璃在滑动中途消失；
-      // 新快照落地后 captureGlassBackground 会自动替换纹理。
+      // 按住 / 拖动时页面已经换了：不显示别的页面，也不铺纯色占位，
+      // 退回实时磨砂（真实模糊背景），等新快照落地再显示玻璃。
+      hideGlassCover();
+      return;
     }
     const r = fill.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) return;
@@ -3557,9 +3695,9 @@ void main() {
     // The shader supplies a smooth SDF edge; CSS clipping here would alias it twice.
     glassCover.style.borderRadius = "0px";
     const mobile = window.innerWidth <= 700 || GLASS_COARSE_POINTER;
-    // 点按过渡期间降一档分辨率：手机 DPR 3 下像素量直接降到 ~2.25 分之一
+    // 点按过渡期间降一档分辨率：手机 DPR 3 下像素量降到约 1/4
     const dpr = tapLensActive
-      ? Math.min(2, glassRenderScale())
+      ? Math.min(1.5, glassRenderScale())
       : glassRenderScale();
     // r 角用“静止时”的半径（px），形变只拉伸/收缩边，不改变圆角大小
     const radius = Math.min(r.width, r.height) / 2;
@@ -3570,8 +3708,7 @@ void main() {
       ? { top: [225, 225, 225], bottom: [218, 220, 223], alpha: 1 }
       : { top: [93, 93, 93], bottom: [69, 69, 69], alpha: 0.8 };
     // 遮罩内的页面要和底栏一样是模糊的，否则会显得“更透更清楚”。
-    const dockFilter =
-      getComputedStyle(root).getPropertyValue("--g-dock-filter").trim() || "";
+    const dockFilter = glassDockFilterValue(root);
     const blurMatch = dockFilter.match(/blur\(\s*([\d.]+)px/i);
     const blurPx = blurMatch ? Number(blurMatch[1]) : 0;
     glassRenderer.resize(canvasW, canvasH, dpr);
@@ -3641,7 +3778,8 @@ void main() {
     if (glassShadow) glassShadow.style.opacity = "0";
     const fill = indicator && indicator.firstElementChild;
     if (!fill) return;
-    fill.style.setProperty("background", "var(--g-dock-glass-surface)");
+    // 不要垫纯色底：只保留实时磨砂，透出底栏本身的背景
+    fill.style.setProperty("background", "transparent");
     fill.style.setProperty("-webkit-backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
     fill.style.setProperty("backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
   }
@@ -3765,10 +3903,29 @@ void main() {
       fctx.fill();
       fctx.restore();
     }
+    const previousTexture = glassTexture;
+    const previousTextureKey = glassTextureKey;
+    const previousRootRect = glassRootRect;
+    const previousScale = glassScale;
+    const previousShellCanvas = glassShellCanvas;
+    const previousShellRect = glassDockShellRect;
+    // 点按前如果已经有真实截图，先存起来：长按放大时直接拿来用，不重新截图
+    tapLensSaved =
+      previousTexture && previousTexture !== glassFlatTexture
+        ? {
+            texture: previousTexture,
+            key: previousTextureKey,
+            rootRect: previousRootRect,
+            scale: previousScale,
+            shellCanvas: previousShellCanvas,
+            shellRect: previousShellRect,
+          }
+        : null;
     glassRenderer.setImage(flat);
     glassRenderer.setShell(shellLayer.canvas);
     glassShellCanvas = shellLayer.canvas;
     if (glassLastOverlay) glassRenderer.setOverlay(glassLastOverlay);
+    glassFlatTexture = flat;
     glassTexture = flat;
     glassTextureKey = getGlassKey(root, vc);
     glassRootRect = vcRect;
@@ -3794,22 +3951,22 @@ void main() {
     if (!ensureGlassRenderer()) return;
     const { root, vc } = getGlassParts();
     const keyChanged = root && vc && getGlassKey(root, vc) !== glassTextureKey;
-    if (!glassTexture || glassDirty || keyChanged) {
-      if (keyChanged || !glassTexture) {
-        // 快照属于别的页面（或还没有快照）：马上用“页面底色占位”开出玻璃遮罩，
-        // 等新快照完成后再替换成真实内容。
-        glassDirty = true;
-        showGlassPlaceholder();
-      } else {
-        // 同一页面的旧帧：先显示，等新快照替换（视觉上连续）。
-        revealGlassCover();
-      }
+    if (!glassTexture || glassTexture === glassFlatTexture || keyChanged) {
+      // 没有可用的真实截图（只有点按用的纯色图，或页面已变）：
+      // 不铺纯色占位，退回实时磨砂，等抓拍拿到新图再显示玻璃。
+      glassDirty = true;
+      hideGlassCover();
       captureGlassBackground();
-      // 抓拍失败/被丢弃时继续重试，避免只剩放大的高亮块。
       ensureGlassReady();
       return;
     }
+    // 已经有可用截图就直接显示，不因为“待重拍”而换成占位；
+    // 需要重拍时也只是排一次抓拍（按住期间会被延后到松手后）。
     revealGlassCover();
+    if (glassDirty) {
+      captureGlassBackground();
+      ensureGlassReady();
+    }
   }
 
   function warmGlassTexture() {
@@ -3858,14 +4015,48 @@ void main() {
     if (!fill) return;
     if (on) {
       // 放大接管玻璃：点按过渡从此交给按压 / 拖动逻辑
+      const fromTapLens = tapLensActive;
       releaseTapLensTracking();
       glassActive = true;
       // Instant CSS fallback while a newly navigated page's texture is warming.
       // The WebGL cover replaces this as soon as a complete scene is ready.
-      fill.style.setProperty("background", "var(--g-dock-glass-surface)");
+      fill.style.setProperty("background", "transparent");
       fill.style.setProperty("-webkit-backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
       fill.style.setProperty("backdrop-filter", "blur(6px) saturate(1.85) brightness(1.1)");
-      initGlassCover();
+      // 从点按玻璃接手时不要重新初始化（那会触发 snapdom 抓拍，卡在滑动中段）。
+      // 如果点按前已经缓存了同一页面的截图，直接把它放回遮罩里。
+      if (!fromTapLens) {
+        initGlassCover();
+      } else {
+        const saved = tapLensSaved;
+        const partsNow = saved ? getGlassParts() : null;
+        const samePage =
+          saved &&
+          partsNow &&
+          partsNow.root &&
+          partsNow.vc &&
+          getGlassKey(partsNow.root, partsNow.vc) === saved.key;
+        if (samePage && saved.texture && glassRenderer) {
+          glassRenderer.setImage(saved.texture);
+          if (saved.shellCanvas) {
+            glassRenderer.setShell(saved.shellCanvas);
+            glassShellCanvas = saved.shellCanvas;
+          }
+          if (glassLastOverlay) glassRenderer.setOverlay(glassLastOverlay);
+          glassTexture = saved.texture;
+          glassTextureKey = saved.key;
+          glassRootRect = saved.rootRect;
+          glassScale = saved.scale;
+          glassDockShellRect = saved.shellRect;
+          glassDirty = false;
+          glassForceCapture = false;
+          revealGlassCover();
+        } else {
+          // 没有可复用的截图：别把点按用的纯色图留在放大后的遮罩里，
+          // 退回实时磨砂，等松手后补拍。
+          hideGlassCover();
+        }
+      }
     } else if (tapLensActive) {
       // 点按玻璃还在滑：保留画布和玻璃填充，只把放大的偏移收回
       clearTimeout(glassOverlayRefreshTimer);
@@ -3880,8 +4071,8 @@ void main() {
       fill.style.setProperty("background", "var(--g-lens-bg)");
       fill.style.setProperty("-webkit-backdrop-filter", "none");
       fill.style.setProperty("backdrop-filter", "none");
-      // 拖动期间被推迟的抓拍，松手后再补上。
-      if (glassDirty) scheduleGlassCapture(0, true);
+      // 拖动期间被推迟的抓拍，松手后再补上；延后一点，避开吸附动画/页面渲染
+      if (glassDirty) scheduleGlassCapture(500, true);
     }
     const dx = on ? `-${GROW_W}px` : "0px";
     const dy = on ? `-${GROW_H_OFF}px` : "0px";
@@ -3913,32 +4104,6 @@ void main() {
   }
   function goToTab(tab) {
     return goToPath(tab && tab.getAttribute("data-path"));
-  }
-
-  // 通过 HA Companion 的原生 external bus 触发 iOS / Android Taptic；
-  // 普通 Android 浏览器则退回 Vibration API。iOS Safari 没有 Web Vibration API。
-  function emitDockHaptic() {
-    const hasCompanionBridge = Boolean(
-      window.externalAppV2 ||
-        window.externalApp ||
-        (window.webkit &&
-          window.webkit.messageHandlers &&
-          window.webkit.messageHandlers.externalBus)
-    );
-
-    if (hasCompanionBridge) {
-      window.dispatchEvent(new CustomEvent("haptic", { detail: "selection" }));
-      return true;
-    }
-
-    if (navigator && typeof navigator.vibrate === "function") {
-      try {
-        return navigator.vibrate(14);
-      } catch (e) {
-        /* vibration may be unavailable or blocked by the browser */
-      }
-    }
-    return false;
   }
 
   // Follow v1.1.1's pill geometry. The growing fill contains the normal
@@ -4079,7 +4244,6 @@ void main() {
           dwellTimer: 0,
           growTimer: 0,
           hoverIdx: -1,
-          hapticFired: false,
         };
         dragState = state;
         tg.classList.add("glass-dragging");
@@ -4090,13 +4254,8 @@ void main() {
         // 按住一小会儿（或开始横向拖动）就把高亮块放大，松手缩回
         state.growTimer = setTimeout(() => {
           if (dragState !== state) return;
-          // 点按切页的玻璃保持 +5% 小尺寸，别被长按放大盖掉
-          if (tapLensActive) return;
           state.grown = true;
           setLensGrow(state.tabs, true);
-          if (!state.hapticFired && state.pointerType !== "mouse") {
-            state.hapticFired = emitDockHaptic();
-          }
         }, CONFIG.dock.pressGrowDelay || 140);
 
         // 按下的不是当前高亮那格：先把高亮滑过去，再开始跟手
@@ -4214,8 +4373,7 @@ void main() {
           y: ev.clientY,
         };
       }
-      const changed = goToTab(target);
-      if (changed && !state.hapticFired) emitDockHaptic();
+      goToTab(target);
       // 吸附动画期间颜色继续跟着高亮块，动画结束停在目标格
       trackHover(state.tabs, reduceMotion ? 0 : MOVE_MS + 180);
     };
@@ -4343,7 +4501,6 @@ void main() {
       const changed = goToTab(next);
       if (changed) {
         suppressSwipeClick = { until: Date.now() + 700, x, y };
-        emitDockHaptic();
       }
       return changed;
     };
@@ -4669,7 +4826,6 @@ void main() {
       if (tapped) beginTapLens();
     }
     indicator.dataset.glassIdx = String(idx);
-    if (performance.now() < pageTintUntil) return;
     // A page switch can trigger several refreshes while HA renders the view.
     // Restart tint tracking only for a real indicator move/resize, not each pass.
     syncTint(tabs);
@@ -4957,14 +5113,22 @@ void main() {
     const themes = ha && ha.hass && ha.hass.themes;
     const light = Boolean(themes && themes.darkMode === false);
     // 侧栏装饰失败不应影响整页皮肤，单独兜住异常。
-    try {
-      styleSidebarFrame(drawer, root, light);
-    } catch (err) {
-      log("sidebar frame failed", err);
+    const frameSidebar = () => {
+      try {
+        styleSidebarFrame(drawer, root, light);
+      } catch (err) {
+        log("sidebar frame failed", err);
+      }
+    };
+    if (!root || !root.shadowRoot) {
+      frameSidebar();
+      return;
     }
-    if (!root || !root.shadowRoot) return;
     const toolbar = root.shadowRoot.querySelector(".toolbar");
-    if (!toolbar) return;
+    if (!toolbar) {
+      frameSidebar();
+      return;
+    }
     if (root.hasAttribute("glass-light") !== light) {
       root.toggleAttribute("glass-light", light);
     }
@@ -4977,7 +5141,8 @@ void main() {
       root.toggleAttribute("glass-on", on);
     }
     if (!on) {
-      // 编辑模式 / 非目标仪表盘：标题样式摘掉，让它回到 header 里可编辑的位置
+      // 编辑模式 / 非目标仪表盘：恢复侧栏原样，标题回到 header 里可编辑的位置
+      frameSidebar();
       toolbar.querySelectorAll(".glass-title").forEach((el) => el.remove());
       if (targeted) syncViewTitle(root, panel, false);
       unlockRootScroll();
@@ -4986,7 +5151,7 @@ void main() {
 
     migrateLegacySidebarMode();
     injectStyle(root);
-    styleSidebarFrame(drawer, root, light);
+    frameSidebar();
     syncSidebarButtonState(root, drawer);
     syncActionsCapsule(root, toolbar);
     lockRootScroll(root);
@@ -5050,14 +5215,22 @@ void main() {
   // 这里在切页后的 400ms 内用 rAF 连续补刷（rAF 在绘制前执行，能赶在标题被画出来之前隐藏）
   let fastUntil = 0;
   let rafId = 0;
+  let fastLastRunAt = 0;
   let lastObservedLocationPath = location.pathname;
   const fastTick = () => {
     rafId = 0;
-    safeRefresh();
+    // 全量 refresh 要遍历多层 shadow DOM（侧栏 / 标题 / 胶囊 / 底栏），
+    // 切页后的补刷限流到约 60ms 一次：既能赶在标题画出前隐藏，又不会每帧都跑。
+    const now = performance.now();
+    if (now - fastLastRunAt >= 55) {
+      fastLastRunAt = now;
+      safeRefresh();
+    }
     if (Date.now() < fastUntil) rafId = requestAnimationFrame(fastTick);
   };
   const fastCatchUp = () => {
     fastUntil = Date.now() + 400;
+    fastLastRunAt = 0; // 立即先跑一次
     if (!rafId) rafId = requestAnimationFrame(fastTick);
   };
 
@@ -5074,6 +5247,8 @@ void main() {
     fastCatchUp();
     glassLastSwitchAt = performance.now();
     observeGlassView(getGlassParts().vc);
+    // 页面身份变了：只在这时让“在飞”的抓拍作废（普通重排不再作废）
+    glassCaptureRevision++;
     // 切页后视图是异步重建的：先拍一张，等布局稳定后再补拍一张，
     // 这样下次按住遮罩时背景已经是新页面。
     scheduleGlassCapture(80, true);
@@ -5082,21 +5257,6 @@ void main() {
       glassViewSettleTimer = 0;
       scheduleGlassCapture(0, true);
     }, 450);
-    if (!dragState && Date.now() >= snapUntil) {
-      // On a native page change, keep the existing tint still while HA and the
-      // indicator settle; apply the final tint once instead of sweeping/flashing
-      // it repeatedly during the repeated fast refreshes.
-      cancelAnimationFrame(hoverRaf);
-      hoverRaf = 0;
-      pageTintUntil = performance.now() + MOVE_MS;
-      clearTimeout(pageTintTimer);
-      pageTintTimer = setTimeout(() => {
-        pageTintUntil = 0;
-        const { root } = parts();
-        const toolbar = root && root.shadowRoot && root.shadowRoot.querySelector(".toolbar");
-        if (toolbar) syncTint(dockTabs(toolbar));
-      }, MOVE_MS + 20);
-    }
     safeRefresh();
   };
 
